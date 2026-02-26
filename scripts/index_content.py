@@ -13,7 +13,10 @@ def main() -> None:
 
     service = IndexingService()
     stats = service.index_jsonl(args.documents, recreate=args.recreate)
-    print(f"Indexed docs={stats.docs_seen}, chunks={stats.chunks_indexed}")
+    print(
+        "Indexed "
+        f"docs={stats.docs_seen}, parents={stats.parents_indexed}, children={stats.children_indexed}"
+    )
 
 
 if __name__ == "__main__":

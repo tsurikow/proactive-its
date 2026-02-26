@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import get_settings
 from app.core.dependencies import get_rag_service, get_repo, get_tutor_flow
@@ -9,6 +10,7 @@ from app.schemas.api import (
     ChatResponse,
     FeedbackRequest,
     FeedbackResponse,
+    LessonCurrentResponse,
     NextRequest,
     NextResponse,
     StartRequest,
@@ -19,56 +21,79 @@ router = APIRouter()
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
+async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
 @router.post("/start", response_model=StartResponse)
-def start(request: StartRequest) -> StartResponse:
+async def start(request: StartRequest) -> StartResponse:
     tutor = get_tutor_flow()
-    payload = tutor.start(request.learner_id)
+    try:
+        payload = await tutor.start(request.learner_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to start session: {exc}") from exc
     return StartResponse(**payload)
 
 
-@router.post("/next", response_model=NextResponse)
-def next_item(request: NextRequest) -> NextResponse:
+@router.get("/lesson/current", response_model=LessonCurrentResponse)
+async def lesson_current(learner_id: str = Query(..., min_length=1)) -> LessonCurrentResponse:
     tutor = get_tutor_flow()
-    payload = tutor.advance(request.learner_id, force=request.force)
+    try:
+        payload = await tutor.get_current_lesson(learner_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to get current lesson: {exc}") from exc
+    return LessonCurrentResponse(**payload)
+
+
+@router.post("/next", response_model=NextResponse)
+async def next_item(request: NextRequest) -> NextResponse:
+    tutor = get_tutor_flow()
+    try:
+        payload = await tutor.advance(request.learner_id, force=request.force)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to advance session: {exc}") from exc
     return NextResponse(**payload)
 
 
 @router.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest) -> ChatResponse:
+async def chat(request: ChatRequest) -> ChatResponse:
     repo = get_repo()
     rag = get_rag_service()
-    tutor = get_tutor_flow()
     settings = get_settings()
 
-    repo.ensure_learner(request.learner_id)
-    session_id = repo.get_or_create_session(request.learner_id)
+    await repo.ensure_learner(request.learner_id)
+    session_id = await repo.get_or_create_session(request.learner_id)
 
     module_id = request.context.current_module_id
     section_id = request.context.current_section_id
 
-    if not module_id and not section_id:
-        current = tutor.current_item(request.learner_id, include_tutor_content=False)
-        if current:
-            module_id = current.get("module_id")
-            section_id = current.get("section_id")
-
     filters = {
-        "module_id": module_id,
-        "section_id": section_id,
-        "doc_type": "section" if section_id else None,
+        "module_id": None,
+        "section_id": None,
+        "doc_type": "section",
     }
 
-    rag_result = rag.answer(
-        message=request.message,
-        mode=request.mode,
-        filters=filters,
-    )
+    try:
+        rag_result = await run_in_threadpool(
+            rag.answer,
+            message=request.message,
+            mode=request.mode,
+            filters=filters,
+            context={
+                "module_id": module_id,
+                "section_id": section_id,
+            },
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    interaction_id = repo.add_interaction(
+    interaction_id = await repo.add_interaction(
         learner_id=request.learner_id,
         session_id=session_id,
         message=request.message,
@@ -77,7 +102,7 @@ def chat(request: ChatRequest) -> ChatResponse:
         section_id=section_id,
     )
 
-    repo.add_interaction_sources(
+    await repo.add_interaction_sources(
         interaction_id,
         [
             {
@@ -100,26 +125,34 @@ def chat(request: ChatRequest) -> ChatResponse:
 
 
 @router.post("/feedback", response_model=FeedbackResponse)
-def post_feedback(request: FeedbackRequest) -> FeedbackResponse:
+async def post_feedback(request: FeedbackRequest) -> FeedbackResponse:
     repo = get_repo()
     tutor = get_tutor_flow()
 
-    repo.ensure_learner(request.learner_id)
+    await repo.ensure_learner(request.learner_id)
 
-    interaction = repo.get_interaction(request.interaction_id)
+    interaction = await repo.get_interaction(request.interaction_id)
     if not interaction or interaction["learner_id"] != request.learner_id:
         raise HTTPException(status_code=404, detail="interaction not found")
 
-    repo.update_interaction_confidence(request.interaction_id, request.confidence)
+    await repo.update_interaction_confidence(request.interaction_id, request.confidence)
 
     section_id = interaction.get("section_id")
     module_id = interaction.get("module_id")
 
-    payload = tutor.apply_feedback(request.learner_id, section_id, module_id, request.confidence)
+    try:
+        payload = await tutor.apply_feedback(
+            request.learner_id,
+            section_id,
+            module_id,
+            request.confidence,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     return FeedbackResponse(
         updated=True,
         auto_advanced=payload["auto_advanced"],
         message=payload.get("message"),
-        current_item=payload.get("current_item"),
+        current_stage=payload.get("current_stage"),
     )

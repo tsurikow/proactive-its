@@ -45,13 +45,19 @@ def _walk_toc(
     return sections
 
 
-def load_toc_sections(book_json_path: str) -> list[TocSection]:
+def load_book_data(book_json_path: str) -> tuple[str, list[TocSection]]:
     path = Path(book_json_path)
     if not path.exists():
-        return []
+        return ("unknown-book", [])
     data = json.loads(path.read_text(encoding="utf-8"))
+    book_id = str(data.get("book_id") or "unknown-book")
     toc = data.get("toc") or {}
-    return _walk_toc(toc)
+    return book_id, _walk_toc(toc)
+
+
+def load_toc_sections(book_json_path: str) -> list[TocSection]:
+    _, sections = load_book_data(book_json_path)
+    return sections
 
 
 def week_start_for(day: date | None = None) -> date:
@@ -70,7 +76,6 @@ def build_linear_plan(toc_sections: list[TocSection], daily_cap: int = 3) -> dic
                 "title": section.title,
                 "breadcrumb": section.breadcrumb,
                 "day": int(day_offset),
-                "chunk_index": 0,
                 "completed": False,
             }
         )
@@ -80,3 +85,18 @@ def build_linear_plan(toc_sections: list[TocSection], daily_cap: int = 3) -> dic
         "daily_cap": daily_cap,
         "targets": targets,
     }
+
+
+def build_stage_targets(toc_sections: list[TocSection]) -> list[dict[str, Any]]:
+    stages: list[dict[str, Any]] = []
+    for index, section in enumerate(toc_sections):
+        stages.append(
+            {
+                "stage_index": index,
+                "section_id": section.section_id,
+                "module_id": section.module_id,
+                "title": section.title,
+                "breadcrumb": section.breadcrumb,
+            }
+        )
+    return stages
