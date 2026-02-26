@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import argparse
 
 from app.state.db import init_db
 from app.state.repository import StateRepository
+
+
+async def _run(learner_id: str, timezone_name: str) -> None:
+    await init_db()
+    repo = StateRepository()
+    await repo.ensure_learner(learner_id, timezone_name=timezone_name)
 
 
 def main() -> None:
@@ -12,9 +19,7 @@ def main() -> None:
     parser.add_argument("--timezone", default="UTC")
     args = parser.parse_args()
 
-    init_db()
-    repo = StateRepository()
-    repo.ensure_learner(args.learner_id, timezone_name=args.timezone)
+    asyncio.run(_run(args.learner_id, args.timezone))
     print(f"Seeded learner '{args.learner_id}'")
 
 

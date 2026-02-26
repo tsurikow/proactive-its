@@ -1,99 +1,59 @@
 from __future__ import annotations
 
-import sqlite3
-from contextlib import contextmanager
+import asyncio
+from contextlib import asynccontextmanager
+from functools import lru_cache
 from pathlib import Path
-from typing import Iterator
+from typing import AsyncIterator
+
+from alembic import command
+from alembic.config import Config
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
 
 
-def _db_path() -> Path:
+@lru_cache(maxsize=1)
+def get_engine() -> AsyncEngine:
     settings = get_settings()
-    path = settings.sqlite_abs_path
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
+    return create_async_engine(
+        settings.database_url,
+        pool_pre_ping=True,
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
+    )
 
 
-@contextmanager
-def get_connection() -> Iterator[sqlite3.Connection]:
-    conn = sqlite3.connect(_db_path(), detect_types=sqlite3.PARSE_DECLTYPES)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
+@lru_cache(maxsize=1)
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(get_engine(), expire_on_commit=False)
 
 
-def init_db() -> None:
-    with get_connection() as conn:
-        conn.executescript(
-            """
-            PRAGMA journal_mode=WAL;
+@asynccontextmanager
+async def get_session() -> AsyncIterator[AsyncSession]:
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
 
-            CREATE TABLE IF NOT EXISTS learners (
-                id TEXT PRIMARY KEY,
-                timezone TEXT NOT NULL DEFAULT 'UTC',
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
-            );
 
-            CREATE TABLE IF NOT EXISTS sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                learner_id TEXT NOT NULL,
-                started_at TEXT NOT NULL DEFAULT (datetime('now')),
-                ended_at TEXT,
-                FOREIGN KEY (learner_id) REFERENCES learners(id)
-            );
+async def init_db() -> None:
+    settings = get_settings()
+    await asyncio.to_thread(_run_migrations, settings.database_url)
 
-            CREATE TABLE IF NOT EXISTS interactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                learner_id TEXT NOT NULL,
-                session_id INTEGER,
-                module_id TEXT,
-                section_id TEXT,
-                message TEXT NOT NULL,
-                answer TEXT NOT NULL,
-                confidence INTEGER,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                FOREIGN KEY (learner_id) REFERENCES learners(id),
-                FOREIGN KEY (session_id) REFERENCES sessions(id)
-            );
 
-            CREATE TABLE IF NOT EXISTS interaction_sources (
-                interaction_id INTEGER NOT NULL,
-                chunk_id TEXT NOT NULL,
-                score REAL,
-                rank INTEGER NOT NULL,
-                PRIMARY KEY (interaction_id, chunk_id),
-                FOREIGN KEY (interaction_id) REFERENCES interactions(id)
-            );
+async def close_db() -> None:
+    engine = get_engine()
+    await engine.dispose()
 
-            CREATE TABLE IF NOT EXISTS topic_progress (
-                learner_id TEXT NOT NULL,
-                module_id TEXT,
-                section_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'in_progress',
-                mastery_score REAL NOT NULL DEFAULT 0.0,
-                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-                PRIMARY KEY (learner_id, section_id),
-                FOREIGN KEY (learner_id) REFERENCES learners(id)
-            );
 
-            CREATE TABLE IF NOT EXISTS study_plans (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                learner_id TEXT NOT NULL,
-                week_start TEXT NOT NULL,
-                plan_json TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'active',
-                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-                UNIQUE (learner_id, week_start),
-                FOREIGN KEY (learner_id) REFERENCES learners(id)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_interactions_learner_created
-                ON interactions (learner_id, created_at DESC);
-            CREATE INDEX IF NOT EXISTS idx_topic_progress_learner_updated
-                ON topic_progress (learner_id, updated_at DESC);
-            """
-        )
+def _run_migrations(database_url: str) -> None:
+    project_root = Path(__file__).resolve().parents[2]
+    config = Config(str(project_root / "alembic.ini"))
+    config.set_main_option("script_location", str(project_root / "alembic"))
+    config.set_main_option("sqlalchemy.url", database_url)
+    command.upgrade(config, "head")

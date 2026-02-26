@@ -8,12 +8,11 @@ from typing import Iterable
 from qdrant_client.http import models as qm
 
 from app.core.config import Settings, get_settings
-from app.ingest.chunker import split_markdown_into_chunks
-from app.ingest.cleaner import clean_markdown
-from app.ingest.loader import iter_documents
+from app.infra.embeddings import EmbeddingClient
+from app.infra.qdrant_store import VectorStore
+from app.ingest.chunker import Chunk, split_markdown_into_chunks
+from app.ingest.io import clean_markdown, iter_documents
 from app.ingest.models import DocumentRecord
-from app.rag.embeddings import EmbeddingClient
-from app.rag.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +20,8 @@ logger = logging.getLogger(__name__)
 @dataclass
 class IndexStats:
     docs_seen: int = 0
-    chunks_indexed: int = 0
+    parents_indexed: int = 0
+    children_indexed: int = 0
 
 
 class IndexingService:
@@ -36,61 +36,91 @@ class IndexingService:
 
     def index_documents(self, documents: Iterable[DocumentRecord], recreate: bool = False) -> IndexStats:
         stats = IndexStats()
-        first_batch = True
+        collections_ready = False
 
         for doc in documents:
             stats.docs_seen += 1
             cleaned = clean_markdown(doc.content_md)
-            chunks = split_markdown_into_chunks(
+            if not cleaned:
+                continue
+
+            section_id = self._resolve_section_id(doc)
+            children = split_markdown_into_chunks(
                 doc_id=doc.doc_id,
                 text=cleaned,
                 target_tokens=self.settings.chunk_target_tokens,
                 overlap_tokens=self.settings.chunk_overlap_tokens,
                 min_signal_chars=self.settings.min_text_chars_for_chunk,
             )
-            if not chunks:
+            if not children:
                 continue
 
-            embeddings = self.embedder.embed_texts([c.content_text for c in chunks])
-            if first_batch:
-                dim = len(embeddings[0])
+            parent_embedding = self.embedder.embed_texts([cleaned])[0]
+            child_embeddings = self.embedder.embed_texts([chunk.content_text for chunk in children])
+            vector_size = len(parent_embedding)
+
+            if not collections_ready:
                 if recreate:
-                    self.vector_store.recreate_collection(dim)
+                    self.vector_store.recreate_collections(vector_size)
                 else:
-                    self.vector_store.ensure_collection(dim)
-                first_batch = False
+                    self.vector_store.ensure_collections(vector_size)
+                collections_ready = True
 
-            points: list[qm.PointStruct] = []
-            for chunk, vector in zip(chunks, embeddings, strict=True):
-                payload = self._payload(doc, chunk.chunk_id, chunk.content_text)
-                point_id = self._point_id(chunk.chunk_id)
-                points.append(qm.PointStruct(id=point_id, vector=vector, payload=payload))
-                stats.chunks_indexed += 1
+            parent_payload = self._parent_payload(doc, section_id=section_id, content_text_full=cleaned)
+            parent_point = qm.PointStruct(
+                id=self._point_id(f"{doc.doc_id}::parent"),
+                vector=parent_embedding,
+                payload=parent_payload,
+            )
 
-            self.vector_store.upsert(points)
-            logger.info("Indexed doc %s with %d chunks", doc.doc_id, len(points))
+            child_points: list[qm.PointStruct] = []
+            for chunk, vector in zip(children, child_embeddings, strict=True):
+                payload = self._child_payload(
+                    doc=doc,
+                    section_id=section_id,
+                    chunk=chunk,
+                )
+                child_points.append(
+                    qm.PointStruct(
+                        id=self._point_id(chunk.chunk_id),
+                        vector=vector,
+                        payload=payload,
+                    )
+                )
+
+            self.vector_store.upsert([parent_point], collection_name=self.settings.qdrant_sections_collection)
+            self.vector_store.upsert(child_points, collection_name=self.settings.qdrant_collection)
+
+            stats.parents_indexed += 1
+            stats.children_indexed += len(child_points)
+            logger.info(
+                "Indexed doc %s: parent=1 children=%d section_id=%s",
+                doc.doc_id,
+                len(child_points),
+                section_id,
+            )
 
         return stats
 
     @staticmethod
-    def _point_id(chunk_id: str) -> str:
-        # Qdrant point IDs must be uint or UUID; use stable UUID derived from chunk_id.
-        return str(uuid.uuid5(uuid.NAMESPACE_URL, chunk_id))
+    def _point_id(raw_id: str) -> str:
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, raw_id))
 
     @staticmethod
-    def _payload(doc: DocumentRecord, chunk_id: str, content_text: str) -> dict:
+    def _resolve_section_id(doc: DocumentRecord) -> str:
+        return str(doc.section_id or doc.module_id or doc.doc_id)
+
+    @staticmethod
+    def _source_payload(doc: DocumentRecord) -> dict:
         source = doc.source if isinstance(doc.source, dict) else doc.source.model_dump()
         figure_ids = [f.id for f in doc.figures if f.id]
         return {
-            "chunk_id": chunk_id,
             "doc_id": doc.doc_id,
             "book_id": doc.book_id,
             "module_id": doc.module_id,
-            "section_id": doc.section_id,
             "doc_type": doc.doc_type,
             "title": doc.title,
             "breadcrumb": doc.breadcrumb,
-            "content_text": content_text,
             "learning_objectives": doc.learning_objectives,
             "terms": doc.terms,
             "figure_ids": figure_ids,
@@ -99,3 +129,29 @@ class IndexingService:
             "source_chunk": source.get("chunk"),
             "source_uuid": source.get("uuid"),
         }
+
+    def _parent_payload(self, doc: DocumentRecord, section_id: str, content_text_full: str) -> dict:
+        payload = self._source_payload(doc)
+        payload.update(
+            {
+                "parent_doc_id": doc.doc_id,
+                "section_id": section_id,
+                "content_text_full": content_text_full,
+            }
+        )
+        return payload
+
+    def _child_payload(self, doc: DocumentRecord, section_id: str, chunk: Chunk) -> dict:
+        payload = self._source_payload(doc)
+        payload.update(
+            {
+                "parent_doc_id": doc.doc_id,
+                "section_id": section_id,
+                "chunk_id": chunk.chunk_id,
+                "order_index": chunk.order_index,
+                "chunk_type": chunk.chunk_type,
+                "subsection_title": chunk.subsection_title,
+                "content_text": chunk.content_text,
+            }
+        )
+        return payload

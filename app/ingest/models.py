@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SourceInfo(BaseModel):
@@ -28,7 +28,7 @@ class DocumentRecord(BaseModel):
     breadcrumb: list[str]
     content_md: str
     doc_type: str
-    learning_objectives: list[str] = []
-    terms: list[str] = []
-    figures: list[FigureRef] = []
-    source: SourceInfo | dict[str, Any] = {}
+    learning_objectives: list[str] = Field(default_factory=list)
+    terms: list[str] = Field(default_factory=list)
+    figures: list[FigureRef] = Field(default_factory=list)
+    source: SourceInfo | dict[str, Any] = Field(default_factory=dict)

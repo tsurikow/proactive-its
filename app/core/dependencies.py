@@ -3,8 +3,8 @@ from __future__ import annotations
 from functools import lru_cache
 
 from app.core.config import get_settings
+from app.infra.qdrant_store import VectorStore
 from app.rag.service import RAGService
-from app.rag.vector_store import VectorStore
 from app.state.repository import StateRepository
 from app.tutor.flow import TutorFlow
 
