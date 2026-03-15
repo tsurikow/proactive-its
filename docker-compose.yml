@@ -7,8 +7,8 @@ services:
       POSTGRES_PASSWORD: postgres
     ports:
       - "5432:5432"
-    tmpfs:
-      - /var/lib/postgresql
+    volumes:
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d proactive_its"]
       interval: 5s
@@ -21,6 +21,19 @@ services:
       - "6333:6333"
     volumes:
       - qdrant_storage:/qdrant/storage
+
+  bootstrap:
+    build: .
+    environment:
+      BOOK_JSON_PATH: data/book.json
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/proactive_its
+    command: ["python", "scripts/bootstrap_runtime.py"]
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   api:
     build: .
@@ -37,11 +50,13 @@ services:
     volumes:
       - ./data:/app/data
     depends_on:
-      postgres:
-        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
       qdrant:
         condition: service_started
 
 volumes:
+  postgres_data:
+    name: proactive_its_postgres_data
   qdrant_storage:
     name: proactive_its_qdrant_storage

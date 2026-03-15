@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
-from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
@@ -28,14 +28,18 @@ class AnswerGenerator:
         self.settings = settings or get_settings()
         if not self.settings.openrouter_api_key:
             raise RuntimeError("OPENROUTER_API_KEY is required for answer generation.")
-        self._parser = JsonOutputParser(pydantic_object=GenerationPayload)
-        self._llm = ChatOpenAI(
+        base_llm = ChatOpenAI(
             model=self.settings.openrouter_model,
             api_key=self.settings.openrouter_api_key,
             base_url=self.settings.openrouter_base_url,
-            temperature=0.05,
+            temperature=0.15,
             timeout=self.settings.rag_generation_timeout_seconds,
             max_retries=1,
+        )
+        self._llm = base_llm.with_structured_output(
+            GenerationPayload,
+            method="json_schema",
+            strict=True,
         )
         self._primary_prompt = ChatPromptTemplate.from_messages(
             [
@@ -50,98 +54,80 @@ class AnswerGenerator:
                 ("user", "{prompt_text}"),
             ]
         )
-        self._repair_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", "You repair invalid JSON outputs without changing intended meaning."),
-                ("user", "{prompt_text}"),
-            ]
-        )
 
-    def generate(
+    async def generate(
         self,
         *,
         question: str,
         chunks: list[dict[str, Any]],
         mode: str,
-    ) -> tuple[str, list[str]]:
+    ) -> tuple[str, list[str], bool]:
         if not chunks:
-            return INSUFFICIENT_EVIDENCE, []
+            return INSUFFICIENT_EVIDENCE, [], False
 
-        format_instructions = self._parser.get_format_instructions()
         figure_links = extract_figure_links(chunks)
-        context_block = self._build_context_block(chunks)
+        context_block, source_map = self._build_context_block(chunks)
         prompt_text = self._build_grounded_user_prompt(
             question=question,
             mode=mode,
             context_block=context_block,
-            format_instructions=format_instructions,
             figure_links=figure_links,
         )
-        raw = self._invoke(prompt=self._primary_prompt, prompt_text=prompt_text, error_prefix="Primary")
-        payload = self._parse_payload(raw)
-        if payload is None:
-            repair_text = self._build_repair_user_prompt(
-                previous_output=raw,
-                format_instructions=format_instructions,
-            )
-            repaired = self._invoke(
-                prompt=self._repair_prompt,
-                prompt_text=repair_text,
-                error_prefix="Repair",
-            )
-            payload = self._parse_payload(repaired)
-        if payload is None:
-            raise RuntimeError("LLM returned invalid JSON after repair attempt.")
+        payload = await self._invoke(prompt=self._primary_prompt, prompt_text=prompt_text, error_prefix="Primary")
 
         answer = self._sanitize_answer(payload.answer_md)
         if not answer:
             raise RuntimeError("LLM returned an empty answer.")
         if answer == INSUFFICIENT_EVIDENCE:
-            return answer, []
+            return answer, [], False
 
-        valid_ids = {str(chunk.get("chunk_id")) for chunk in chunks if chunk.get("chunk_id")}
-        citations = [cid for cid in payload.citations if cid in valid_ids]
+        citations = [source_map[label] for label in payload.citations if label in source_map]
+        citation_fallback_used = False
         if not citations:
             top = next((str(chunk.get("chunk_id")) for chunk in chunks if chunk.get("chunk_id")), "")
             if top:
                 citations = [top]
+                citation_fallback_used = True
 
         answer = self._append_figure_links(question, answer, payload.figure_links, figure_links)
-        return answer, citations
+        return answer, citations, citation_fallback_used
 
-    def _invoke(self, *, prompt: ChatPromptTemplate, prompt_text: str, error_prefix: str) -> str:
+    async def _invoke(
+        self,
+        *,
+        prompt: ChatPromptTemplate,
+        prompt_text: str,
+        error_prefix: str,
+    ) -> GenerationPayload:
         chain = prompt | self._llm
         try:
-            response = chain.invoke({"prompt_text": prompt_text})
+            response = await asyncio.wait_for(
+                chain.ainvoke({"prompt_text": prompt_text}),
+                timeout=self.settings.rag_generation_timeout_seconds,
+            )
         except Exception as exc:
             raise RuntimeError(f"{error_prefix} LLM generation request failed.") from exc
-        content = getattr(response, "content", "")
-        if isinstance(content, list):
-            return "".join(part.get("text", "") if isinstance(part, dict) else str(part) for part in content)
-        return str(content or "")
-
-    def _parse_payload(self, raw: str) -> GenerationPayload | None:
-        if not raw.strip():
-            return None
-        try:
-            parsed = self._parser.parse(raw)
-        except Exception:
-            return None
-        if isinstance(parsed, dict):
-            try:
-                return GenerationPayload.model_validate(parsed)
-            except Exception:
-                return None
-        if isinstance(parsed, GenerationPayload):
-            return parsed
-        return None
+        if isinstance(response, GenerationPayload):
+            return response
+        if isinstance(response, dict):
+            return GenerationPayload.model_validate(response)
+        raise RuntimeError(f"{error_prefix} LLM returned an unexpected structured payload.")
 
     @staticmethod
     def _sanitize_answer(answer: str) -> str:
         text = str(answer or "").strip()
         text = re.sub(r"```(?:json|markdown)?", "", text, flags=re.IGNORECASE).strip()
+        text = re.sub(r"\.collection:[^\s)\]]+", "", text)
+        text = re.sub(r"\b[a-z0-9_-]+::chunk\d+\b", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\bfs-id[0-9a-z_-]*\b", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\bSource\s*[Ss]\d+\b", "", text)
+        text = re.sub(r"(?:(?<=\s)|^)[([]?\s*S\d+\s*[\])]?([,;:]?)", r"\1", text)
         text = re.sub(r"\n{3,}", "\n\n", text)
-        return strip_non_figure_links(text)
+        text = re.sub(r"[ \t]{2,}", " ", text)
+        text = re.sub(r"\(\s*\)", "", text)
+        text = re.sub(r"\[\s*]", "", text)
+        text = strip_non_figure_links(text)
+        return text.strip()
 
     @staticmethod
     def _append_figure_links(
@@ -165,8 +151,9 @@ class AnswerGenerator:
         self,
         chunks: list[dict[str, Any]],
         max_chars_per_chunk: int = 1100,
-    ) -> str:
+    ) -> tuple[str, dict[str, str]]:
         blocks: list[str] = []
+        source_map: dict[str, str] = {}
         for chunk in chunks:
             chunk_id = str(chunk.get("chunk_id", ""))
             if not chunk_id:
@@ -177,14 +164,16 @@ class AnswerGenerator:
             text = self._prompt_excerpt(chunk_text(chunk), max_chars=max_chars_per_chunk)
             if not text:
                 continue
+            source_label = f"S{len(source_map) + 1}"
+            source_map[source_label] = chunk_id
             blocks.append(
-                f"[CHUNK {chunk_id}]\n"
+                f"[SOURCE {source_label}]\n"
                 f"Title: {title}\n"
                 f"Type: {chunk_type}\n"
                 f"Subsection: {subsection}\n"
                 f"Text:\n{text}"
             )
-        return "\n\n".join(blocks)
+        return "\n\n".join(blocks), source_map
 
     @staticmethod
     def _prompt_excerpt(text: str, max_chars: int = 850) -> str:
@@ -199,7 +188,6 @@ class AnswerGenerator:
         question: str,
         mode: str,
         context_block: str,
-        format_instructions: str,
         figure_links: list[str],
     ) -> str:
         mode_hint = (
@@ -209,39 +197,22 @@ class AnswerGenerator:
         )
         figure_block = "\n".join(f"- {link}" for link in figure_links[:10]) if figure_links else "none"
         return (
-            "Answer using only the retrieved evidence. Do not paste raw chunks verbatim.\n"
+            "Answer using only the retrieved evidence. Write like a strong tutor, not like a retriever dump.\n"
             f"{mode_hint}\n\n"
-            f"{format_instructions}\n\n"
             "Rules:\n"
             "- Use only facts present in retrieved chunks.\n"
+            "- Answer the learner directly first, then add concise explanation or one short example if helpful.\n"
+            "- Do not quote source metadata, source labels, chunk ids, collection ids, or anchors in the answer text.\n"
+            "- Do not paste raw chunks verbatim.\n"
             "- Keep Markdown clean and readable.\n"
             "- Use only valid LaTeX delimiters ($...$ or $$...$$).\n"
             "- Do not output internal anchors/IDs or non-figure links.\n"
-            "- citations must be chunk ids from retrieved chunks only.\n"
+            "- citations must be source labels from the retrieved sources only (for example: S1, S2).\n"
             "- If evidence is insufficient, return this exact answer_md:\n"
             f"  {INSUFFICIENT_EVIDENCE}\n"
             "- Include figure_links only when directly relevant.\n\n"
             f"Question:\n{question}\n\n"
             f"Available figure links:\n{figure_block}\n\n"
-            "Retrieved chunks:\n"
+            "Retrieved sources:\n"
             f"{context_block}"
-        )
-
-    @staticmethod
-    def _build_repair_user_prompt(
-        *,
-        previous_output: str,
-        format_instructions: str,
-    ) -> str:
-        return (
-            "Your previous output was invalid.\n"
-            "Return valid JSON that matches the required schema exactly.\n"
-            f"{format_instructions}\n\n"
-            "Constraints:\n"
-            "- Preserve the original meaning.\n"
-            "- citations must be an array of chunk ids.\n"
-            f"- Use exact refusal text when evidence is missing: {INSUFFICIENT_EVIDENCE}\n"
-            "- No markdown fences.\n\n"
-            "Previous output:\n"
-            f"{previous_output}"
         )

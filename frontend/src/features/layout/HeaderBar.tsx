@@ -6,7 +6,7 @@ import {
   User,
 } from "lucide-react";
 
-import type { HealthState } from "../session/useTutorSession";
+import type { HealthState } from "../session/types";
 
 interface HeaderBarProps {
   health: HealthState;

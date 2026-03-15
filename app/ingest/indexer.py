@@ -25,6 +25,8 @@ class IndexStats:
 
 
 class IndexingService:
+    point_batch_size = 256
+
     def __init__(self, settings: Settings | None = None):
         self.settings = settings or get_settings()
         self.embedder = EmbeddingClient(self.settings)
@@ -37,6 +39,8 @@ class IndexingService:
     def index_documents(self, documents: Iterable[DocumentRecord], recreate: bool = False) -> IndexStats:
         stats = IndexStats()
         collections_ready = False
+        parent_buffer: list[qm.PointStruct] = []
+        child_buffer: list[qm.PointStruct] = []
 
         for doc in documents:
             stats.docs_seen += 1
@@ -55,8 +59,9 @@ class IndexingService:
             if not children:
                 continue
 
-            parent_embedding = self.embedder.embed_texts([cleaned])[0]
-            child_embeddings = self.embedder.embed_texts([chunk.content_text for chunk in children])
+            all_embeddings = self.embedder.embed_texts([cleaned, *[chunk.content_text for chunk in children]])
+            parent_embedding = all_embeddings[0]
+            child_embeddings = all_embeddings[1:]
             vector_size = len(parent_embedding)
 
             if not collections_ready:
@@ -88,8 +93,9 @@ class IndexingService:
                     )
                 )
 
-            self.vector_store.upsert([parent_point], collection_name=self.settings.qdrant_sections_collection)
-            self.vector_store.upsert(child_points, collection_name=self.settings.qdrant_collection)
+            parent_buffer.append(parent_point)
+            child_buffer.extend(child_points)
+            self._flush_if_needed(parent_buffer, child_buffer)
 
             stats.parents_indexed += 1
             stats.children_indexed += len(child_points)
@@ -100,7 +106,21 @@ class IndexingService:
                 section_id,
             )
 
+        self._flush_points(parent_buffer, self.settings.qdrant_sections_collection)
+        self._flush_points(child_buffer, self.settings.qdrant_collection)
         return stats
+
+    def _flush_if_needed(self, parent_buffer: list[qm.PointStruct], child_buffer: list[qm.PointStruct]) -> None:
+        if len(parent_buffer) >= self.point_batch_size:
+            self._flush_points(parent_buffer, self.settings.qdrant_sections_collection)
+        if len(child_buffer) >= self.point_batch_size:
+            self._flush_points(child_buffer, self.settings.qdrant_collection)
+
+    def _flush_points(self, points: list[qm.PointStruct], collection_name: str) -> None:
+        if not points:
+            return
+        self.vector_store.upsert(points[:], collection_name=collection_name)
+        points.clear()
 
     @staticmethod
     def _point_id(raw_id: str) -> str:

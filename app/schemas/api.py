@@ -30,15 +30,14 @@ class RetrievalDebug(BaseModel):
     filtered_by: dict[str, str]
     scores: list[dict[str, float | str]]
     top_score: float | None = None
-    dense_top_score: float | None = None
-    dense_failed: bool | None = None
-    best_term_overlap: float | None = None
-    required_term_matches: int | None = None
-    query_intent: str | None = None
+    citation_fallback_used: bool | None = None
+    rewrite_attempted: bool | None = None
+    rewrite_query: str | None = None
+    rewrite_accepted: bool | None = None
+    rewrite_reason: str | None = None
     evidence_chars: int | None = None
     weak_evidence: bool | None = None
     retrieval_mode: str | None = None
-    embedding_backend: str | None = None
     timings_ms: dict[str, float] | None = None
 
 
@@ -83,6 +82,22 @@ class LessonStep(BaseModel):
     order_index: int
 
 
+class PlanTreeNode(BaseModel):
+    node_type: Literal["book", "group", "stage"]
+    title: str
+    breadcrumb: list[str] = Field(default_factory=list)
+    children: list["PlanTreeNode"] = Field(default_factory=list)
+    stage_index: int | None = None
+    section_id: str | None = None
+    module_id: str | None = None
+    completed: bool | None = None
+    completed_leaf_count: int = 0
+    total_leaf_count: int = 0
+    mastery_score: float = 0.0
+    is_current_branch: bool = False
+    is_current_stage: bool = False
+
+
 class LessonPayload(BaseModel):
     section_summary_md: str | None = None
     lesson_steps: list[LessonStep] = Field(default_factory=list)
@@ -95,6 +110,8 @@ class PlanProgress(BaseModel):
     template_id: str
     total_stages: int
     completed_stages: int
+    mastery_score: float = 0.0
+    tree: PlanTreeNode | None = None
 
 
 class StartResponse(BaseModel):
@@ -104,13 +121,21 @@ class StartResponse(BaseModel):
     plan_completed: bool
 
 
-class NextResponse(BaseModel):
+class StartMessageResponse(BaseModel):
     message: str
     current_stage: StageInfo | None
     plan_completed: bool
 
 
+class NextResponse(BaseModel):
+    message: str
+    plan: PlanProgress
+    current_stage: StageInfo | None
+    plan_completed: bool
+
+
 class LessonCurrentResponse(BaseModel):
+    plan: PlanProgress
     current_stage: StageInfo | None
     lesson: LessonPayload | None
     plan_completed: bool
@@ -121,3 +146,6 @@ class FeedbackResponse(BaseModel):
     auto_advanced: bool
     message: str | None = None
     current_stage: StageInfo | None = None
+
+
+PlanTreeNode.model_rebuild()

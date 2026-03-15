@@ -32,12 +32,13 @@ class Settings(BaseSettings):
 
     rag_top_k_fetch: int = 24
     rag_final_k: int = 6
+    rag_mmr_lambda_mult: float = 0.5
     rag_min_score: float = 0.2
     rag_min_evidence_chars: int = 180
-    rag_min_term_overlap: float = 0.28
-    rag_context_section_boost: float = 0.18
-    rag_context_module_boost: float = 0.08
     rag_generation_timeout_seconds: float = 45.0
+    rag_query_rewrite_enabled: bool = True
+    rag_query_rewrite_timeout_seconds: float = 6.0
+    rag_query_rewrite_model: str | None = None
 
     chunk_target_tokens: int = 450
     chunk_overlap_tokens: int = 60

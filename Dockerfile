@@ -5,6 +5,8 @@ WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:0.5.14 /uv /uvx /bin/
 
 ENV UV_LINK_MODE=copy
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/.venv/bin:$PATH"
 
 COPY pyproject.toml uv.lock README.md ./

@@ -8,6 +8,7 @@ from typing import AsyncIterator
 
 from alembic import command
 from alembic.config import Config
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
@@ -42,8 +43,9 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 
 async def init_db() -> None:
-    settings = get_settings()
-    await asyncio.to_thread(_run_migrations, settings.database_url)
+    engine = get_engine()
+    async with engine.connect() as connection:
+        await connection.execute(text("SELECT 1"))
 
 
 async def close_db() -> None:
@@ -57,3 +59,8 @@ def _run_migrations(database_url: str) -> None:
     config.set_main_option("script_location", str(project_root / "alembic"))
     config.set_main_option("sqlalchemy.url", database_url)
     command.upgrade(config, "head")
+
+
+async def run_migrations() -> None:
+    settings = get_settings()
+    await asyncio.to_thread(_run_migrations, settings.database_url)
