@@ -152,6 +152,7 @@ frontend/dist/
 # Project data and local runtime artifacts
 data/**
 !data/.gitkeep
+summary.md
 
 # Spyder project settings
 .spyderproject

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Iterator
@@ -24,4 +23,4 @@ def iter_documents(path: str | Path) -> Iterator[DocumentRecord]:
         for line in source:
             line = line.strip()
             if line:
-                yield DocumentRecord.model_validate(json.loads(line))
+                yield DocumentRecord.model_validate_json(line)

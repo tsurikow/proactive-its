@@ -4,9 +4,9 @@ import argparse
 from dataclasses import dataclass
 
 from app.core.config import get_settings
-from app.infra.embeddings import EmbeddingClient
 from app.ingest.chunker import split_markdown_into_chunks
 from app.ingest.io import clean_markdown, iter_documents
+from app.ingest.token_count import build_token_counter
 
 
 @dataclass
@@ -45,7 +45,7 @@ def main() -> None:
 
     settings = get_settings()
     max_tokens = args.max_tokens or int(settings.embedding_max_input_tokens)
-    embedder = EmbeddingClient(settings)
+    token_counter = build_token_counter()
 
     parent_rows: list[ParentBudgetRow] = []
     child_rows: list[ChildBudgetRow] = []
@@ -78,7 +78,7 @@ def main() -> None:
                 doc_type=doc.doc_type,
                 module_id=doc.module_id,
                 section_id=doc.section_id,
-                est_tokens=embedder.estimate_tokens(cleaned),
+                est_tokens=token_counter.count(cleaned),
             )
         )
         resolved_section = doc.section_id or doc.module_id or doc.doc_id
@@ -90,7 +90,7 @@ def main() -> None:
                     module_id=doc.module_id,
                     section_id=resolved_section,
                     order_index=chunk.order_index,
-                    est_tokens=embedder.estimate_tokens(chunk.content_text),
+                    est_tokens=token_counter.count(chunk.content_text),
                 )
             )
 

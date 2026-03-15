@@ -44,6 +44,9 @@ export default function App() {
             currentBreadcrumb={session.currentBreadcrumb}
             messages={session.messages}
             loading={session.loading}
+            pendingStatus={session.pendingStatus}
+            focusMessageId={session.focusMessageId}
+            onFocusedMessage={session.clearFocusMessageId}
             hasLearner={session.hasLearner}
             chatInput={session.chatInput}
             onChatInputChange={session.setChatInput}
@@ -53,10 +56,8 @@ export default function App() {
             completedStages={session.completedStages}
             totalStages={session.totalStages}
             progress={session.progress}
-            currentNumber={session.currentNumber}
-            currentTitle={session.currentTitle}
-            currentBreadcrumb={session.currentBreadcrumb}
-            nextStage={session.nextStage}
+            masteryScore={session.subjectMasteryScore}
+            tree={session.planTree}
             planCompleted={session.planCompleted}
           />
         </div>

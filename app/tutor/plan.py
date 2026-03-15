@@ -1,102 +1,147 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
 
-@dataclass
-class TocSection:
-    section_id: str
-    title: str
-    module_id: str | None
-    breadcrumb: list[str]
-
-
-def _walk_toc(
-    node: dict[str, Any],
-    current_module_id: str | None = None,
-    path: list[str] | None = None,
-) -> list[TocSection]:
-    sections: list[TocSection] = []
-    path = list(path or [])
-    if node.get("title"):
-        path.append(str(node.get("title")))
-    node_module = node.get("module_id") or current_module_id
-    children = node.get("children") or []
-
-    if not children and node.get("id"):
-        module_id = node.get("module_id") or current_module_id
-        if module_id:
-            sections.append(
-                TocSection(
-                    section_id=str(node.get("id")),
-                    title=str(node.get("title", node.get("id"))),
-                    module_id=module_id,
-                    breadcrumb=path,
-                )
-            )
-
-    for child in children:
-        sections.extend(_walk_toc(child, node_module, path))
-
-    return sections
-
-
-def load_book_data(book_json_path: str) -> tuple[str, list[TocSection]]:
+def load_book_data(book_json_path: str) -> tuple[str, dict[str, Any]]:
     path = Path(book_json_path)
     if not path.exists():
-        return ("unknown-book", [])
+        return ("unknown-book", {})
     data = json.loads(path.read_text(encoding="utf-8"))
-    book_id = str(data.get("book_id") or "unknown-book")
-    toc = data.get("toc") or {}
-    return book_id, _walk_toc(toc)
+    return str(data.get("book_id") or "unknown-book"), dict(data.get("toc") or {})
 
 
-def load_toc_sections(book_json_path: str) -> list[TocSection]:
-    _, sections = load_book_data(book_json_path)
-    return sections
+def build_hierarchical_plan(toc: dict[str, Any]) -> dict[str, Any]:
+    stage_targets: list[dict[str, Any]] = []
 
+    def walk(
+        node: dict[str, Any],
+        *,
+        depth: int,
+        current_module_id: str | None,
+        path: list[str],
+    ) -> dict[str, Any] | None:
+        title = str(node.get("title") or node.get("id") or "").strip()
+        if not title:
+            return None
 
-def week_start_for(day: date | None = None) -> date:
-    today = day or date.today()
-    return today - timedelta(days=today.weekday())
+        breadcrumb = [*path, title]
+        node_module_id = node.get("module_id") or current_module_id
+        children = [child for child in (node.get("children") or []) if isinstance(child, dict)]
 
+        if children:
+            child_nodes = [
+                child_node
+                for child in children
+                if (child_node := walk(child, depth=depth + 1, current_module_id=node_module_id, path=breadcrumb))
+            ]
+            if not child_nodes:
+                return None
+            return {
+                "node_type": "book" if depth == 0 else "group",
+                "title": title,
+                "breadcrumb": breadcrumb,
+                "children": child_nodes,
+            }
 
-def build_linear_plan(toc_sections: list[TocSection], daily_cap: int = 3) -> dict[str, Any]:
-    targets: list[dict[str, Any]] = []
-    for section in toc_sections:
-        day_offset = len(targets) // daily_cap if daily_cap > 0 else 0
-        targets.append(
+        section_id = str(node.get("id") or "").strip()
+        module_id = str(node_module_id).strip() if node_module_id else None
+        if not section_id or not module_id:
+            return None
+
+        stage_index = len(stage_targets)
+        stage_targets.append(
             {
-                "section_id": section.section_id,
-                "module_id": section.module_id,
-                "title": section.title,
-                "breadcrumb": section.breadcrumb,
-                "day": int(day_offset),
-                "completed": False,
+                "stage_index": stage_index,
+                "section_id": section_id,
+                "module_id": module_id,
+                "title": title,
+                "breadcrumb": breadcrumb,
             }
         )
+        return {
+            "node_type": "stage",
+            "title": title,
+            "breadcrumb": breadcrumb,
+            "children": [],
+            "stage_index": stage_index,
+            "section_id": section_id,
+            "module_id": module_id,
+        }
 
-    return {
-        "week_start": week_start_for().isoformat(),
-        "daily_cap": daily_cap,
-        "targets": targets,
-    }
+    root = walk(toc, depth=0, current_module_id=None, path=[])
+    if root is None:
+        return {"stage_targets": [], "plan_tree": None}
+    return {"stage_targets": stage_targets, "plan_tree": root}
 
 
-def build_stage_targets(toc_sections: list[TocSection]) -> list[dict[str, Any]]:
-    stages: list[dict[str, Any]] = []
-    for index, section in enumerate(toc_sections):
-        stages.append(
+def annotate_plan_tree(
+    template_tree: dict[str, Any] | None,
+    *,
+    completed_count: int,
+    current_stage_index: int | None,
+    plan_completed: bool,
+    mastery_map: dict[str, float],
+) -> dict[str, Any] | None:
+    if not template_tree:
+        return None
+
+    def walk(node: dict[str, Any]) -> dict[str, Any]:
+        node_type = str(node.get("node_type") or "group")
+        annotated = {
+            "node_type": node_type,
+            "title": str(node.get("title") or ""),
+            "breadcrumb": [str(item) for item in node.get("breadcrumb") or []],
+            "children": [],
+            "stage_index": node.get("stage_index"),
+            "section_id": node.get("section_id"),
+            "module_id": node.get("module_id"),
+        }
+
+        if node_type == "stage":
+            stage_index = int(node.get("stage_index", -1))
+            completed = stage_index >= 0 and stage_index < int(completed_count)
+            current = (
+                current_stage_index is not None
+                and not plan_completed
+                and stage_index == int(current_stage_index)
+            )
+            mastery_score = float(mastery_map.get(str(node.get("section_id") or ""), 0.0))
+            annotated.update(
+                {
+                    "children": [],
+                    "completed": completed,
+                    "completed_leaf_count": 1 if completed else 0,
+                    "total_leaf_count": 1,
+                    "mastery_score": mastery_score,
+                    "is_current_branch": current,
+                    "is_current_stage": current,
+                }
+            )
+            return annotated
+
+        children = [walk(child) for child in node.get("children") or [] if isinstance(child, dict)]
+        total_leaf_count = sum(int(child.get("total_leaf_count", 0)) for child in children)
+        completed_leaf_count = sum(int(child.get("completed_leaf_count", 0)) for child in children)
+        mastery_total = sum(
+            float(child.get("mastery_score", 0.0)) * int(child.get("total_leaf_count", 0))
+            for child in children
+        )
+        mastery_score = mastery_total / total_leaf_count if total_leaf_count else 0.0
+        is_current_branch = any(bool(child.get("is_current_branch")) for child in children)
+        annotated.update(
             {
-                "stage_index": index,
-                "section_id": section.section_id,
-                "module_id": section.module_id,
-                "title": section.title,
-                "breadcrumb": section.breadcrumb,
+                "children": children,
+                "completed": total_leaf_count > 0 and completed_leaf_count == total_leaf_count,
+                "completed_leaf_count": completed_leaf_count,
+                "total_leaf_count": total_leaf_count,
+                "mastery_score": mastery_score,
+                "is_current_branch": is_current_branch,
+                "is_current_stage": False,
             }
         )
-    return stages
+        return annotated
+
+    return walk(template_tree)

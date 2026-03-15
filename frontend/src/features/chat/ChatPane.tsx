@@ -1,14 +1,18 @@
 import { useEffect, useRef } from "react";
-import { BookOpen, Lightbulb, MessageCircle, Send } from "lucide-react";
+import { BookOpen, Lightbulb, LoaderCircle, MessageCircle, Send } from "lucide-react";
 
 import { MarkdownMath } from "../../components/MarkdownMath";
 import type { FeedMessage } from "./types";
+import type { PendingStatus } from "../session/types";
 
 interface ChatPaneProps {
   currentTitle: string;
   currentBreadcrumb: string;
   messages: FeedMessage[];
   loading: boolean;
+  pendingStatus: PendingStatus | null;
+  focusMessageId: string | null;
+  onFocusedMessage: () => void;
   hasLearner: boolean;
   chatInput: string;
   onChatInputChange: (value: string) => void;
@@ -20,6 +24,9 @@ export function ChatPane({
   currentBreadcrumb,
   messages,
   loading,
+  pendingStatus,
+  focusMessageId,
+  onFocusedMessage,
   hasLearner,
   chatInput,
   onChatInputChange,
@@ -27,14 +34,36 @@ export function ChatPane({
 }: ChatPaneProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const isNearBottomRef = useRef(true);
+  const messageRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
     const root = scrollRef.current;
-    if (!root || !isNearBottomRef.current) {
+    if (!root || !isNearBottomRef.current || focusMessageId) {
       return;
     }
     root.scrollTo({ top: root.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+  }, [messages, focusMessageId]);
+
+  useEffect(() => {
+    if (!focusMessageId) {
+      return;
+    }
+    const root = scrollRef.current;
+    const target = messageRefs.current[focusMessageId];
+    if (!root || !target) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const rootRect = root.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const offsetTop = targetRect.top - rootRect.top + root.scrollTop - 16;
+      root.scrollTo({ top: Math.max(0, offsetTop), behavior: "smooth" });
+      onFocusedMessage();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [focusMessageId, messages.length, onFocusedMessage]);
 
   return (
     <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white/50">
@@ -64,6 +93,9 @@ export function ChatPane({
             messages.map((message) => (
               <section
                 key={message.id}
+                ref={(node) => {
+                  messageRefs.current[message.id] = node;
+                }}
                 className={`rounded-2xl border p-5 shadow-sm ${
                   message.role === "user"
                     ? "ml-8 border-teal-200 bg-teal-50/60"
@@ -83,21 +115,32 @@ export function ChatPane({
                   content={message.content}
                   className="prose prose-slate max-w-none text-slate-700"
                 />
-                {message.citations && message.citations.length > 0 ? (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {message.citations.map((citation) => (
-                      <span
-                        key={`${message.id}-${citation.chunk_id}`}
-                        className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600"
-                      >
-                        {citation.title || citation.chunk_id}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
               </section>
             ))
           )}
+
+          {pendingStatus ? (
+            <section
+              className={`rounded-2xl border p-5 shadow-sm ${
+                pendingStatus.kind === "answer"
+                  ? "border-slate-200 bg-white"
+                  : "border-indigo-200 bg-indigo-50/50"
+              }`}
+            >
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-600">
+                <LoaderCircle className="h-4 w-4 animate-spin text-teal-600" />
+                {pendingStatus.kind === "answer" ? "Tutor" : "Lesson"}
+              </div>
+              <div className="flex items-center gap-3 text-slate-700">
+                <span>{pendingStatus.text}</span>
+                <span className="loading-dots" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              </div>
+            </section>
+          ) : null}
 
           <section className="rounded-2xl border border-teal-100 bg-teal-50 p-5">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-teal-800">
@@ -113,6 +156,12 @@ export function ChatPane({
 
       <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[#F8FAFC] via-[#F8FAFC]/90 to-transparent px-4 pb-6 pt-10 sm:px-8">
         <div className="mx-auto max-w-3xl">
+          {pendingStatus ? (
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-teal-200 bg-white/90 px-3 py-1.5 text-xs font-semibold text-teal-700 shadow-sm">
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+              {pendingStatus.text}
+            </div>
+          ) : null}
           <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg transition-all focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/20">
             <div className="p-3 text-slate-400">
               <MessageCircle className="h-6 w-6" />

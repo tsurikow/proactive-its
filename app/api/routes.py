@@ -1,10 +1,17 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
-from starlette.concurrency import run_in_threadpool
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.core.config import get_settings
-from app.core.dependencies import get_rag_service, get_repo, get_tutor_flow
+from app.core.config import Settings, get_settings
+from app.core.dependencies import (
+    get_interaction_repository,
+    get_lesson_service,
+    get_plan_projection_service,
+    get_rag_service,
+    get_tutor_session_service,
+    get_tutor_state_repository,
+)
+from app.rag.service import RAGService
 from app.schemas.api import (
     ChatRequest,
     ChatResponse,
@@ -13,6 +20,7 @@ from app.schemas.api import (
     LessonCurrentResponse,
     NextRequest,
     NextResponse,
+    StartMessageResponse,
     StartRequest,
     StartResponse,
 )
@@ -26,10 +34,12 @@ async def health() -> dict[str, str]:
 
 
 @router.post("/start", response_model=StartResponse)
-async def start(request: StartRequest) -> StartResponse:
-    tutor = get_tutor_flow()
+async def start(
+    request: StartRequest,
+    session_service=Depends(get_tutor_session_service),
+) -> StartResponse:
     try:
-        payload = await tutor.start(request.learner_id)
+        payload = await session_service.start_payload(request.learner_id)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
@@ -37,11 +47,54 @@ async def start(request: StartRequest) -> StartResponse:
     return StartResponse(**payload)
 
 
-@router.get("/lesson/current", response_model=LessonCurrentResponse)
-async def lesson_current(learner_id: str = Query(..., min_length=1)) -> LessonCurrentResponse:
-    tutor = get_tutor_flow()
+@router.get("/start-message", response_model=StartMessageResponse)
+async def start_message(
+    learner_id: str = Query(..., min_length=1),
+    session_service=Depends(get_tutor_session_service),
+) -> StartMessageResponse:
     try:
-        payload = await tutor.get_current_lesson(learner_id)
+        payload = await session_service.start_message_payload(learner_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to get start message: {exc}") from exc
+    return StartMessageResponse(**payload)
+
+
+@router.get("/lesson/current", response_model=LessonCurrentResponse)
+async def lesson_current(
+    learner_id: str = Query(..., min_length=1),
+    session_service=Depends(get_tutor_session_service),
+    plan_projection=Depends(get_plan_projection_service),
+    lesson_service=Depends(get_lesson_service),
+) -> LessonCurrentResponse:
+    try:
+        template, state, targets, current_stage = await session_service.ensure_context(learner_id)
+        plan = await plan_projection.build_plan_payload(
+            template=template,
+            state=state,
+            current_stage=current_stage,
+        )
+        if not current_stage:
+            payload = {
+                "current_stage": None,
+                "lesson": None,
+                "plan": plan,
+                "plan_completed": True,
+            }
+        else:
+            lesson, stage_with_parent = await lesson_service.get_or_generate(
+                template_id=str(template["id"]),
+                stage=current_stage,
+            )
+            next_stage = session_service.next_stage(targets, current_stage)
+            lesson_service.schedule_prewarm(template_id=str(template["id"]), stage=next_stage)
+            payload = {
+                "current_stage": stage_with_parent,
+                "lesson": lesson,
+                "plan": plan,
+                "plan_completed": bool(state["plan_completed"]),
+            }
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
@@ -50,10 +103,17 @@ async def lesson_current(learner_id: str = Query(..., min_length=1)) -> LessonCu
 
 
 @router.post("/next", response_model=NextResponse)
-async def next_item(request: NextRequest) -> NextResponse:
-    tutor = get_tutor_flow()
+async def next_item(
+    request: NextRequest,
+    session_service=Depends(get_tutor_session_service),
+    lesson_service=Depends(get_lesson_service),
+) -> NextResponse:
     try:
-        payload = await tutor.advance(request.learner_id, force=request.force)
+        payload, next_stage, template_id = await session_service.advance_payload(
+            request.learner_id,
+            force=request.force,
+        )
+        lesson_service.schedule_prewarm(template_id=template_id, stage=next_stage)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
@@ -62,13 +122,16 @@ async def next_item(request: NextRequest) -> NextResponse:
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
-    repo = get_repo()
-    rag = get_rag_service()
-    settings = get_settings()
+async def chat(
+    request: ChatRequest,
+    interaction_repo=Depends(get_interaction_repository),
+    rag: RAGService = Depends(get_rag_service),
+    settings: Settings = Depends(get_settings),
+    tutor_state_repo=Depends(get_tutor_state_repository),
+) -> ChatResponse:
 
-    await repo.ensure_learner(request.learner_id)
-    session_id = await repo.get_or_create_session(request.learner_id)
+    await tutor_state_repo.ensure_learner(request.learner_id)
+    session_id = await interaction_repo.get_or_create_session(request.learner_id)
 
     module_id = request.context.current_module_id
     section_id = request.context.current_section_id
@@ -80,8 +143,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     }
 
     try:
-        rag_result = await run_in_threadpool(
-            rag.answer,
+        rag_result = await rag.answer(
             message=request.message,
             mode=request.mode,
             filters=filters,
@@ -93,18 +155,14 @@ async def chat(request: ChatRequest) -> ChatResponse:
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    interaction_id = await repo.add_interaction(
+    interaction_id = await interaction_repo.create_interaction_with_sources(
         learner_id=request.learner_id,
         session_id=session_id,
         message=request.message,
         answer=rag_result["answer_md"],
         module_id=module_id,
         section_id=section_id,
-    )
-
-    await repo.add_interaction_sources(
-        interaction_id,
-        [
+        sources=[
             {
                 "chunk_id": c["chunk_id"],
                 "score": c.get("score"),
@@ -125,23 +183,26 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
 
 @router.post("/feedback", response_model=FeedbackResponse)
-async def post_feedback(request: FeedbackRequest) -> FeedbackResponse:
-    repo = get_repo()
-    tutor = get_tutor_flow()
+async def post_feedback(
+    request: FeedbackRequest,
+    interaction_repo=Depends(get_interaction_repository),
+    session_service=Depends(get_tutor_session_service),
+    tutor_state_repo=Depends(get_tutor_state_repository),
+) -> FeedbackResponse:
 
-    await repo.ensure_learner(request.learner_id)
+    await tutor_state_repo.ensure_learner(request.learner_id)
 
-    interaction = await repo.get_interaction(request.interaction_id)
+    interaction = await interaction_repo.get_interaction(request.interaction_id)
     if not interaction or interaction["learner_id"] != request.learner_id:
         raise HTTPException(status_code=404, detail="interaction not found")
 
-    await repo.update_interaction_confidence(request.interaction_id, request.confidence)
+    await interaction_repo.update_interaction_confidence(request.interaction_id, request.confidence)
 
     section_id = interaction.get("section_id")
     module_id = interaction.get("module_id")
 
     try:
-        payload = await tutor.apply_feedback(
+        payload = await session_service.apply_feedback(
             request.learner_id,
             section_id,
             module_id,

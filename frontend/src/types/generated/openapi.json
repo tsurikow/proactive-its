@@ -1,0 +1,1146 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Proactive ITS",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health V1 Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/start": {
+      "post": {
+        "summary": "Start",
+        "operationId": "start_v1_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/start-message": {
+      "get": {
+        "summary": "Start Message",
+        "operationId": "start_message_v1_start_message_get",
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartMessageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lesson/current": {
+      "get": {
+        "summary": "Lesson Current",
+        "operationId": "lesson_current_v1_lesson_current_get",
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LessonCurrentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/next": {
+      "post": {
+        "summary": "Next Item",
+        "operationId": "next_item_v1_next_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NextRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chat": {
+      "post": {
+        "summary": "Chat",
+        "operationId": "chat_v1_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/feedback": {
+      "post": {
+        "summary": "Post Feedback",
+        "operationId": "post_feedback_v1_feedback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ChatContext": {
+        "properties": {
+          "current_module_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Module Id"
+          },
+          "current_section_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Section Id"
+          }
+        },
+        "type": "object",
+        "title": "ChatContext"
+      },
+      "ChatRequest": {
+        "properties": {
+          "learner_id": {
+            "type": "string",
+            "title": "Learner Id"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "context": {
+            "$ref": "#/components/schemas/ChatContext"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "tutor",
+              "quiz"
+            ],
+            "title": "Mode",
+            "default": "tutor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner_id",
+          "message"
+        ],
+        "title": "ChatRequest"
+      },
+      "ChatResponse": {
+        "properties": {
+          "interaction_id": {
+            "type": "integer",
+            "title": "Interaction Id"
+          },
+          "answer_md": {
+            "type": "string",
+            "title": "Answer Md"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "retrieval_debug": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RetrievalDebug"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "interaction_id",
+          "answer_md",
+          "citations"
+        ],
+        "title": "ChatResponse"
+      },
+      "Citation": {
+        "properties": {
+          "chunk_id": {
+            "type": "string",
+            "title": "Chunk Id"
+          },
+          "doc_id": {
+            "type": "string",
+            "title": "Doc Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "breadcrumb": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Breadcrumb"
+          },
+          "quote": {
+            "type": "string",
+            "title": "Quote"
+          }
+        },
+        "type": "object",
+        "required": [
+          "chunk_id",
+          "doc_id",
+          "title",
+          "breadcrumb",
+          "quote"
+        ],
+        "title": "Citation"
+      },
+      "FeedbackRequest": {
+        "properties": {
+          "learner_id": {
+            "type": "string",
+            "title": "Learner Id"
+          },
+          "interaction_id": {
+            "type": "integer",
+            "title": "Interaction Id"
+          },
+          "confidence": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Confidence"
+          },
+          "helpful": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Helpful"
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner_id",
+          "interaction_id",
+          "confidence"
+        ],
+        "title": "FeedbackRequest"
+      },
+      "FeedbackResponse": {
+        "properties": {
+          "updated": {
+            "type": "boolean",
+            "title": "Updated"
+          },
+          "auto_advanced": {
+            "type": "boolean",
+            "title": "Auto Advanced"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "current_stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "updated",
+          "auto_advanced"
+        ],
+        "title": "FeedbackResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LessonCurrentResponse": {
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/PlanProgress"
+          },
+          "current_stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lesson": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LessonPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_completed": {
+            "type": "boolean",
+            "title": "Plan Completed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plan",
+          "current_stage",
+          "lesson",
+          "plan_completed"
+        ],
+        "title": "LessonCurrentResponse"
+      },
+      "LessonPayload": {
+        "properties": {
+          "section_summary_md": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Summary Md"
+          },
+          "lesson_steps": {
+            "items": {
+              "$ref": "#/components/schemas/LessonStep"
+            },
+            "type": "array",
+            "title": "Lesson Steps"
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached",
+            "default": false
+          },
+          "generation_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Mode"
+          },
+          "preservation_report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preservation Report"
+          }
+        },
+        "type": "object",
+        "title": "LessonPayload"
+      },
+      "LessonStep": {
+        "properties": {
+          "step_id": {
+            "type": "string",
+            "title": "Step Id"
+          },
+          "step_type": {
+            "type": "string",
+            "enum": [
+              "goal",
+              "definition",
+              "concept",
+              "example",
+              "check",
+              "remediation",
+              "summary"
+            ],
+            "title": "Step Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "content_md": {
+            "type": "string",
+            "title": "Content Md"
+          },
+          "source_chunk_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Chunk Ids"
+          },
+          "order_index": {
+            "type": "integer",
+            "title": "Order Index"
+          }
+        },
+        "type": "object",
+        "required": [
+          "step_id",
+          "step_type",
+          "title",
+          "content_md",
+          "source_chunk_ids",
+          "order_index"
+        ],
+        "title": "LessonStep"
+      },
+      "NextRequest": {
+        "properties": {
+          "learner_id": {
+            "type": "string",
+            "title": "Learner Id"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner_id"
+        ],
+        "title": "NextRequest"
+      },
+      "NextResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/PlanProgress"
+          },
+          "current_stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_completed": {
+            "type": "boolean",
+            "title": "Plan Completed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "plan",
+          "current_stage",
+          "plan_completed"
+        ],
+        "title": "NextResponse"
+      },
+      "PlanProgress": {
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "title": "Template Id"
+          },
+          "total_stages": {
+            "type": "integer",
+            "title": "Total Stages"
+          },
+          "completed_stages": {
+            "type": "integer",
+            "title": "Completed Stages"
+          },
+          "mastery_score": {
+            "type": "number",
+            "title": "Mastery Score",
+            "default": 0.0
+          },
+          "tree": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanTreeNode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "template_id",
+          "total_stages",
+          "completed_stages"
+        ],
+        "title": "PlanProgress"
+      },
+      "PlanTreeNode": {
+        "properties": {
+          "node_type": {
+            "type": "string",
+            "enum": [
+              "book",
+              "group",
+              "stage"
+            ],
+            "title": "Node Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "breadcrumb": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Breadcrumb"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/PlanTreeNode"
+            },
+            "type": "array",
+            "title": "Children"
+          },
+          "stage_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Index"
+          },
+          "section_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Id"
+          },
+          "module_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module Id"
+          },
+          "completed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed"
+          },
+          "completed_leaf_count": {
+            "type": "integer",
+            "title": "Completed Leaf Count",
+            "default": 0
+          },
+          "total_leaf_count": {
+            "type": "integer",
+            "title": "Total Leaf Count",
+            "default": 0
+          },
+          "mastery_score": {
+            "type": "number",
+            "title": "Mastery Score",
+            "default": 0.0
+          },
+          "is_current_branch": {
+            "type": "boolean",
+            "title": "Is Current Branch",
+            "default": false
+          },
+          "is_current_stage": {
+            "type": "boolean",
+            "title": "Is Current Stage",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "node_type",
+          "title"
+        ],
+        "title": "PlanTreeNode"
+      },
+      "RetrievalDebug": {
+        "properties": {
+          "top_k": {
+            "type": "integer",
+            "title": "Top K"
+          },
+          "filtered_by": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Filtered By"
+          },
+          "scores": {
+            "items": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Scores"
+          },
+          "top_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Score"
+          },
+          "citation_fallback_used": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citation Fallback Used"
+          },
+          "rewrite_attempted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rewrite Attempted"
+          },
+          "rewrite_query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rewrite Query"
+          },
+          "rewrite_accepted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rewrite Accepted"
+          },
+          "rewrite_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rewrite Reason"
+          },
+          "evidence_chars": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Chars"
+          },
+          "weak_evidence": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weak Evidence"
+          },
+          "retrieval_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieval Mode"
+          },
+          "timings_ms": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timings Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "top_k",
+          "filtered_by",
+          "scores"
+        ],
+        "title": "RetrievalDebug"
+      },
+      "StageInfo": {
+        "properties": {
+          "stage_index": {
+            "type": "integer",
+            "title": "Stage Index"
+          },
+          "section_id": {
+            "type": "string",
+            "title": "Section Id"
+          },
+          "module_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module Id"
+          },
+          "parent_doc_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Doc Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "breadcrumb": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Breadcrumb"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stage_index",
+          "section_id"
+        ],
+        "title": "StageInfo"
+      },
+      "StartMessageResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "current_stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_completed": {
+            "type": "boolean",
+            "title": "Plan Completed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "current_stage",
+          "plan_completed"
+        ],
+        "title": "StartMessageResponse"
+      },
+      "StartRequest": {
+        "properties": {
+          "learner_id": {
+            "type": "string",
+            "title": "Learner Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner_id"
+        ],
+        "title": "StartRequest"
+      },
+      "StartResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/PlanProgress"
+          },
+          "current_stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_completed": {
+            "type": "boolean",
+            "title": "Plan Completed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "plan",
+          "current_stage",
+          "plan_completed"
+        ],
+        "title": "StartResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

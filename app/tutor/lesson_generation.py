@@ -3,35 +3,27 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import re
-from dataclasses import dataclass
 from typing import Any
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from app.core.config import Settings, get_settings
-from app.core.markdown_sanitize import strip_non_figure_links
-_MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*]\([^)]+\)")
-_HTML_IMAGE_RE = re.compile(r"<img\b[^>]*>", flags=re.IGNORECASE)
-_TABLE_SEPARATOR_RE = re.compile(
-    r"^\s*\|?\s*:?-{3,}:?(?:\s*\|\s*:?-{3,}:?)+\s*\|?\s*$"
+from app.core.markdown_sanitize import sanitize_lesson_markdown
+from app.tutor.document_blocks import (
+    IMMUTABLE_BLOCK_TYPES,
+    REWRITE_BLOCK_TYPES,
+    describe_blocks_for_prompt,
+    normalize_section_markdown,
+    render_blocks_for_lesson,
+    restore_immutable_blocks,
 )
-_CODE_FENCE_RE = re.compile(r"^\s*```")
-_FIGURE_CAPTION_RE = re.compile(r"^\s*\*Figure:.*\*\s*$", flags=re.IGNORECASE)
-_BEGIN_ENV_RE = re.compile(r"\\begin\{([a-zA-Z*]+)\}")
-_END_ENV_TEMPLATE = r"\\end\{%s\}"
-
-
-@dataclass
-class ProtectedBlock:
-    token: str
-    content: str
-    kind: str
 
 
 class SectionLessonGenerator:
-    generator_version = "llm_single_stage_v4"
+    generator_version = "llm_block_rewrite_v1"
+    prompt_profile_version = "lesson_prompt_v4"
 
-    def __init__(self, settings: Settings | None = None, llm_client: OpenAI | None = None):
+    def __init__(self, settings: Settings | None = None, llm_client: AsyncOpenAI | None = None):
         self.settings = settings or get_settings()
         self.llm_client = llm_client
 
@@ -52,30 +44,34 @@ class SectionLessonGenerator:
         if self.llm_client is None:
             raise RuntimeError("OPENROUTER_API_KEY is required for lesson generation.")
 
-        source_hash = self._hash(source)
-        protected_text, blocks = self._protect_blocks(source)
-        candidate = await self._generate_single_stage_lesson(
-            section_markdown=protected_text,
-            title=title,
-            breadcrumb=breadcrumb,
-        )
-        candidate = await self._refine_lesson_output(
-            draft_markdown=candidate,
-            title=title,
-            breadcrumb=breadcrumb,
-        )
+        blocks = normalize_section_markdown(source)
+        if not blocks:
+            raise RuntimeError(f"Section '{section_id}' could not be normalized into document blocks.")
 
-        final_markdown = self._restore_blocks(candidate, blocks).strip()
-        final_markdown = strip_non_figure_links(final_markdown)
-        if not final_markdown:
+        lesson_frame, placeholders = render_blocks_for_lesson(blocks)
+        generated = await self._generate_lesson_markdown(
+            title=title,
+            breadcrumb=breadcrumb,
+            lesson_frame=lesson_frame,
+            block_outline=describe_blocks_for_prompt(blocks),
+        )
+        final_markdown = restore_immutable_blocks(generated, placeholders)
+        final_markdown = self._drop_unresolved_tokens(final_markdown)
+        final_markdown = sanitize_lesson_markdown(final_markdown)
+        if not final_markdown.strip():
             raise RuntimeError("Lesson generation returned empty markdown.")
 
-        lesson = {
+        source_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
+        return {
             "format_version": int(self.settings.lesson_gen_format_version),
             "generator_version": self.generator_version,
+            "prompt_profile_version": self.prompt_profile_version,
             "source_hash": source_hash,
-            "generation_mode": "llm_single_stage",
-            "preservation_report": None,
+            "generation_mode": "llm_block_rewrite_v1",
+            "preservation_report": {
+                "immutable_block_count": sum(1 for block in blocks if block.block_type in IMMUTABLE_BLOCK_TYPES),
+                "rewrite_block_count": sum(1 for block in blocks if block.block_type in REWRITE_BLOCK_TYPES),
+            },
             "section_summary_md": None,
             "lesson_steps": [
                 {
@@ -88,91 +84,46 @@ class SectionLessonGenerator:
                 }
             ],
         }
-        return lesson
 
-    async def _generate_single_stage_lesson(
+    async def _generate_lesson_markdown(
         self,
         *,
-        section_markdown: str,
         title: str,
         breadcrumb: list[str],
+        lesson_frame: str,
+        block_outline: str,
     ) -> str:
-        prompt = self._build_single_stage_prompt(
-            section_markdown=section_markdown,
-            title=title,
-            breadcrumb=breadcrumb,
+        prompt = (
+            "Transform the source section into one coherent teacher-style lesson in Markdown.\n"
+            "You are allowed to rewrite prose freely, but you must preserve the exact order of ideas and blocks.\n"
+            "Output Markdown only.\n\n"
+            "Rules:\n"
+            "- Keep every placeholder token like [[BLOCK_0001]] exactly once and in the same order.\n"
+            "- Treat placeholder tokens as immutable blocks for tables, figures, code, or raw HTML.\n"
+            "- Explain like a strong teacher: clearer than the book, but not shorter than needed.\n"
+            "- Preserve mathematical meaning exactly.\n"
+            "- If the source math is malformed or awkward, rewrite it into valid KaTeX-ready LaTeX.\n"
+            "- Use $...$ for inline math and $$...$$ for display math.\n"
+            "- Do not leave formulas as plain text when they should be mathematical notation.\n"
+            "- Keep headings in the same order. You may lightly polish wording, but do not remove headings.\n"
+            "- Solution-like material should become hints, setup, or scaffolding, not full final solved answers.\n"
+            "- Remove non-learner-facing internal references and anchor-like noise.\n"
+            "- Keep figure links only if they are already present through placeholders.\n"
+            "- Keep lists, examples, and exercises pedagogically useful.\n\n"
+            f"Section title: {title}\n"
+            f"Section path: {' -> '.join(breadcrumb)}\n\n"
+            f"Block outline:\n{block_outline}\n\n"
+            f"Source lesson frame:\n\n{lesson_frame}"
         )
         return await self._run_llm_markdown(
             system_prompt=(
-                "You are an expert teacher-editor. Keep all source structure and data, "
-                "but explain with clear pedagogy and natural teacher voice."
+                "You are a precise tutor-editor. Rewrite prose for pedagogy, preserve structure, "
+                "and never alter immutable block tokens."
             ),
             user_prompt=prompt,
             timeout=self.settings.lesson_max_section_seconds,
-            temperature=0.25,
-            err_label="single-stage generation",
-        )
-
-    async def _refine_lesson_output(
-        self,
-        *,
-        draft_markdown: str,
-        title: str,
-        breadcrumb: list[str],
-    ) -> str:
-        prompt = (
-            "Refine this lesson markdown for pedagogy quality and KaTeX safety.\n"
-            "Output markdown only.\n\n"
-            "Hard constraints:\n"
-            "- Preserve all [[BLOCK_xxxx]] tokens exactly.\n"
-            "- Keep heading order unchanged.\n"
-            "- Remove internal IDs/references like CNX_* and fs-id* from visible text.\n"
-            "- Keep figure links only.\n"
-            "- Fix malformed LaTeX for KaTeX (delimiter/syntax cleanup only; keep meaning).\n"
-            "- Do not show full worked solutions to students.\n"
-            "- If there is a Solution block, convert it into short 'Try it first' hints without final numeric/algebraic answer.\n"
-            "- Keep definitions/theorems/examples/exercises present.\n\n"
-            f"Section title: {title}\n"
-            f"Path: {' -> '.join(breadcrumb)}\n\n"
-            f"Draft markdown:\n\n{draft_markdown}"
-        )
-        try:
-            return await self._run_llm_markdown(
-                system_prompt=(
-                    "You are a strict lesson quality editor for math education. "
-                    "Improve clarity while preserving source content and structure."
-                ),
-                user_prompt=prompt,
-                timeout=max(20.0, float(self.settings.lesson_max_section_seconds) * 0.5),
-                temperature=0.0,
-                err_label="lesson refinement",
-            )
-        except Exception:
-            return draft_markdown
-
-    @staticmethod
-    def _build_single_stage_prompt(*, section_markdown: str, title: str, breadcrumb: list[str]) -> str:
-        return (
-            "Rewrite this full section as a clear, friendly teacher lesson.\n"
-            "You can improve explanation style and pedagogical flow, but keep complete technical coverage.\n"
-            "Output markdown only.\n\n"
-            "Hard constraints:\n"
-            "- Preserve every [[BLOCK_xxxx]] token exactly as-is, unchanged text.\n"
-            "- Keep every heading and keep heading order exactly.\n"
-            "- Keep figure links only; remove all other links and internal anchor IDs.\n"
-            "- Never show raw internal identifiers such as CNX_* or fs-id*.\n"
-            "- Keep mathematical meaning unchanged.\n"
-            "- Fix LaTeX delimiter/syntax issues conservatively so KaTeX can render.\n"
-            "- Preserve tables and non-prose content structure.\n"
-            "- Do not remove definitions, examples, theorems, proofs, checkpoints, or exercises.\n"
-            "- Do not expose full worked solutions; convert Solution parts to hints without final answers.\n\n"
-            "Mandatory self-check before final output:\n"
-            "1) Every heading from source exists in output in same order.\n"
-            "2) Every [[BLOCK_xxxx]] appears exactly once in same order.\n"
-            "3) No placeholder text other than valid [[BLOCK_xxxx]] tokens.\n\n"
-            f"Section title: {title}\n"
-            f"Path: {' -> '.join(breadcrumb)}\n"
-            f"Source markdown:\n\n{section_markdown}"
+            temperature=0.35,
+            err_label="lesson generation",
         )
 
     async def _run_llm_markdown(
@@ -188,12 +139,7 @@ class SectionLessonGenerator:
             raise RuntimeError("LLM client is not configured.")
         try:
             raw = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._chat_completion,
-                    system_prompt,
-                    user_prompt,
-                    temperature,
-                ),
+                self._chat_completion(system_prompt, user_prompt, temperature),
                 timeout=timeout,
             )
         except Exception as exc:
@@ -203,16 +149,17 @@ class SectionLessonGenerator:
             raise RuntimeError(f"Lesson LLM step returned empty output ({err_label}).")
         return text
 
-    def _chat_completion(self, system_prompt: str, user_prompt: str, temperature: float) -> str:
+    async def _chat_completion(self, system_prompt: str, user_prompt: str, temperature: float) -> str:
         if self.llm_client is None:
             return ""
-        completion = self.llm_client.chat.completions.create(
+        completion = await self.llm_client.chat.completions.create(
             model=self.settings.openrouter_model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=temperature,
+            timeout=self.settings.lesson_max_section_seconds,
         )
         return str(completion.choices[0].message.content or "").strip()
 
@@ -223,123 +170,10 @@ class SectionLessonGenerator:
         text = re.sub(r"\s*```$", "", text).strip()
         return text
 
-    def _protect_blocks(self, markdown: str) -> tuple[str, list[ProtectedBlock]]:
-        lines = markdown.splitlines(keepends=True)
-        blocks: list[ProtectedBlock] = []
-        out: list[str] = []
-        idx = 0
-
-        def add_block(content: str, kind: str) -> None:
-            token = f"[[BLOCK_{len(blocks) + 1:04d}]]"
-            blocks.append(ProtectedBlock(token=token, content=content, kind=kind))
-            out.append(f"{token}\n")
-
-        while idx < len(lines):
-            line = lines[idx]
-            if _CODE_FENCE_RE.match(line):
-                j = idx + 1
-                while j < len(lines):
-                    if _CODE_FENCE_RE.match(lines[j]):
-                        j += 1
-                        break
-                    j += 1
-                add_block("".join(lines[idx:j]), "code_fence")
-                idx = j
-                continue
-
-            if "$$" in line:
-                if line.count("$$") >= 2:
-                    add_block(line, "display_math")
-                    idx += 1
-                    continue
-                j = idx + 1
-                while j < len(lines):
-                    if "$$" in lines[j]:
-                        j += 1
-                        break
-                    j += 1
-                add_block("".join(lines[idx:j]), "display_math")
-                idx = j
-                continue
-
-            if r"\[" in line:
-                if r"\]" in line:
-                    add_block(line, "display_math")
-                    idx += 1
-                    continue
-                j = idx + 1
-                while j < len(lines):
-                    if r"\]" in lines[j]:
-                        j += 1
-                        break
-                    j += 1
-                add_block("".join(lines[idx:j]), "display_math")
-                idx = j
-                continue
-
-            env_match = _BEGIN_ENV_RE.search(line)
-            if env_match:
-                env_name = env_match.group(1)
-                end_pattern = re.compile(_END_ENV_TEMPLATE % re.escape(env_name))
-                if end_pattern.search(line):
-                    add_block(line, "latex_env")
-                    idx += 1
-                    continue
-                j = idx + 1
-                while j < len(lines):
-                    if end_pattern.search(lines[j]):
-                        j += 1
-                        break
-                    j += 1
-                add_block("".join(lines[idx:j]), "latex_env")
-                idx = j
-                continue
-
-            if self._is_table_start(lines, idx):
-                j = idx + 1
-                while j < len(lines) and self._looks_like_table_line(lines[j]):
-                    j += 1
-                add_block("".join(lines[idx:j]), "table")
-                idx = j
-                continue
-
-            if _MARKDOWN_IMAGE_RE.search(line) or _HTML_IMAGE_RE.search(line):
-                j = idx + 1
-                if j < len(lines) and _FIGURE_CAPTION_RE.match(lines[j].strip()):
-                    j += 1
-                add_block("".join(lines[idx:j]), "image")
-                idx = j
-                continue
-
-            out.append(line)
-            idx += 1
-
-        return "".join(out).strip(), blocks
-
     @staticmethod
-    def _is_table_start(lines: list[str], idx: int) -> bool:
-        if idx + 1 >= len(lines):
-            return False
-        current = lines[idx].strip()
-        next_line = lines[idx + 1].strip()
-        if "|" not in current:
-            return False
-        return bool(_TABLE_SEPARATOR_RE.match(next_line))
-
-    @staticmethod
-    def _looks_like_table_line(line: str) -> bool:
-        stripped = line.strip()
-        if not stripped:
-            return False
-        return "|" in stripped
-
-    @staticmethod
-    def _restore_blocks(text: str, blocks: list[ProtectedBlock]) -> str:
-        restored = text
-        for block in blocks:
-            restored = restored.replace(block.token, block.content.strip("\n"))
-        return restored
-
-    @staticmethod
-    def _hash(text: str) -> str:
-        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    def _drop_unresolved_tokens(markdown: str) -> str:
+        text = str(markdown or "")
+        text = re.sub(r"^\s*\[\[BLOCK_\d{4}]]\s*$", "", text, flags=re.MULTILINE)
+        text = re.sub(r"\[\[BLOCK_\d{4}]]", "", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()

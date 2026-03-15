@@ -3,6 +3,7 @@ import type {
   HealthResponse,
   LessonCurrentResponse,
   NextResponse,
+  StartMessageResponse,
   StartResponse,
 } from "../types/api";
 
@@ -83,6 +84,13 @@ export function startSession(learnerId: string): Promise<StartResponse> {
   return request<StartResponse>("/start", {
     method: "POST",
     body: JSON.stringify({ learner_id: learnerId }),
+  });
+}
+
+export function getStartMessage(learnerId: string): Promise<StartMessageResponse> {
+  const params = new URLSearchParams({ learner_id: learnerId });
+  return request<StartMessageResponse>(`/start-message?${params.toString()}`, {
+    method: "GET",
   });
 }
 

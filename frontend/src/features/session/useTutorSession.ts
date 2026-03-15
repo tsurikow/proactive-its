@@ -1,19 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
-import { getCurrentLesson, getHealth, nextSection, sendChat, startSession } from "../../api/client";
 import type { PlanProgress, StageInfo } from "../../types/api";
-import { nextMessageId, toLessonMessages } from "../chat/message-utils";
 import type { FeedMessage } from "../chat/types";
+import { nextMessageId } from "../chat/message-utils";
 import { normalizeApiError } from "./errors";
+import { useChatSession } from "./useChatSession";
+import { useLessonLoader } from "./useLessonLoader";
+import { useRequestGuards } from "./requestGuards";
+import { useSessionBootstrap } from "./useSessionBootstrap";
+import { useHealthQuery } from "./useTutorQueries";
+import type { HealthState, PendingStatus, SessionError } from "./types";
 
 const LEARNER_STORAGE_KEY = "its.learner_id";
 
-export type HealthState = "checking" | "ok" | "down";
-
-export interface SessionError {
-  text: string;
-  canRetry: boolean;
-}
+export type { HealthState, SessionError } from "./types";
 
 export function useTutorSession() {
   const [learnerId, setLearnerId] = useState<string | null>(() =>
@@ -24,22 +24,18 @@ export function useTutorSession() {
   const [planCompleted, setPlanCompleted] = useState(false);
   const [messages, setMessages] = useState<FeedMessage[]>([]);
   const [loading, setLoading] = useState(false);
-  const [health, setHealth] = useState<HealthState>("checking");
   const [error, setError] = useState<SessionError | null>(null);
   const [chatInput, setChatInput] = useState("");
+  const [pendingStatus, setPendingStatus] = useState<PendingStatus | null>(null);
+  const [focusMessageId, setFocusMessageId] = useState<string | null>(null);
   const retryActionRef = useRef<(() => Promise<void>) | null>(null);
+  const healthQuery = useHealthQuery();
 
-  useEffect(() => {
-    const check = async () => {
-      try {
-        const response = await getHealth();
-        setHealth(response.status === "ok" ? "ok" : "down");
-      } catch {
-        setHealth("down");
-      }
-    };
-    void check();
-  }, []);
+  const { beginRequestVersion, invalidateRequests, isActiveRequest, currentRequestVersion } =
+    useRequestGuards(learnerId);
+
+  const health: HealthState =
+    healthQuery.isPending ? "checking" : healthQuery.data?.status === "ok" ? "ok" : "down";
 
   const hasLearner = Boolean(learnerId);
 
@@ -71,6 +67,8 @@ export function useTutorSession() {
   const totalStages = plan?.total_stages ?? 0;
   const completedStages = plan?.completed_stages ?? 0;
   const nextStage = currentStage && totalStages > currentNumber ? currentNumber + 1 : null;
+  const planTree = plan?.tree ?? null;
+  const subjectMasteryScore = plan?.mastery_score ?? 0;
 
   const runAction = async (action: () => Promise<void>) => {
     setLoading(true);
@@ -84,6 +82,7 @@ export function useTutorSession() {
         return;
       }
       retryActionRef.current = normalized.timeout ? action : null;
+      setPendingStatus(null);
       setError({ text: normalized.message, canRetry: normalized.timeout });
       setMessages((prev) => [
         ...prev,
@@ -99,130 +98,50 @@ export function useTutorSession() {
     }
   };
 
-  const loadCurrentLesson = async (activeLearner: string) => {
-    const lessonResponse = await getCurrentLesson(activeLearner);
-    setCurrentStage(lessonResponse.current_stage);
-    setPlanCompleted(lessonResponse.plan_completed);
-    if (!lessonResponse.lesson) {
-      return;
-    }
-    setMessages((prev) => [...prev, ...toLessonMessages(lessonResponse.lesson)]);
-  };
+  const { loadCurrentLesson, tryLoadCurrentLesson, refreshStartMessage } = useLessonLoader({
+    setPlan,
+    setCurrentStage,
+    setPlanCompleted,
+    setMessages,
+    setError,
+    setPendingStatus,
+    setFocusMessageId,
+    retryActionRef,
+    isActiveRequest,
+  });
 
-  const tryLoadCurrentLesson = async (activeLearner: string) => {
-    try {
-      await loadCurrentLesson(activeLearner);
-    } catch (err) {
-      const normalized = normalizeApiError(err);
-      retryActionRef.current = normalized.timeout
-        ? async () => {
-            await loadCurrentLesson(activeLearner);
-          }
-        : null;
-      setError({ text: normalized.message, canRetry: normalized.timeout });
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: nextMessageId(),
-          role: "error",
-          title: "Lesson fetch failed",
-          content: normalized.message,
-        },
-      ]);
-    }
-  };
+  const { start, next, setLearner } = useSessionBootstrap({
+    learnerId,
+    setLearnerId,
+    setPlan,
+    setCurrentStage,
+    setPlanCompleted,
+    setMessages,
+    setChatInput,
+    setError,
+    setPendingStatus,
+    setFocusMessageId,
+    runAction,
+    tryLoadCurrentLesson,
+    refreshStartMessage,
+    beginRequestVersion,
+    invalidateRequests,
+    isActiveRequest,
+  });
 
-  const start = async () => {
-    if (!learnerId) {
-      return;
-    }
-    await runAction(async () => {
-      const response = await startSession(learnerId);
-      setPlan(response.plan);
-      setCurrentStage(response.current_stage);
-      setPlanCompleted(response.plan_completed);
-      setMessages([
-        {
-          id: nextMessageId(),
-          role: "system",
-          title: "Tutor",
-          content: response.message,
-        },
-      ]);
-      if (!response.plan_completed && response.current_stage) {
-        await tryLoadCurrentLesson(learnerId);
-      }
-    });
-  };
-
-  const next = async () => {
-    if (!learnerId) {
-      return;
-    }
-    await runAction(async () => {
-      const response = await nextSection(learnerId, false);
-      setCurrentStage(response.current_stage);
-      setPlanCompleted(response.plan_completed);
-      setPlan((prev) =>
-        prev
-          ? {
-              ...prev,
-              completed_stages: Math.min(prev.total_stages, prev.completed_stages + 1),
-            }
-          : prev,
-      );
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: nextMessageId(),
-          role: "system",
-          title: "Tutor",
-          content: response.message,
-        },
-      ]);
-
-      if (!response.plan_completed && response.current_stage) {
-        await tryLoadCurrentLesson(learnerId);
-      }
-    });
-  };
-
-  const send = async () => {
-    const message = chatInput.trim();
-    if (!learnerId || !message || loading) {
-      return;
-    }
-
-    setChatInput("");
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: nextMessageId(),
-        role: "user",
-        content: message,
-      },
-    ]);
-
-    await runAction(async () => {
-      const response = await sendChat(
-        learnerId,
-        message,
-        currentStage?.module_id ?? null,
-        currentStage?.section_id ?? null,
-      );
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: nextMessageId(),
-          role: "assistant",
-          title: "Answer",
-          content: response.answer_md,
-          citations: response.citations,
-        },
-      ]);
-    });
-  };
+  const { send } = useChatSession({
+    learnerId,
+    loading,
+    chatInput,
+    currentStage,
+    setChatInput,
+    setMessages,
+    setPendingStatus,
+    setFocusMessageId,
+    runAction,
+    isActiveRequest,
+    currentRequestVersion,
+  });
 
   const retry = async () => {
     const action = retryActionRef.current;
@@ -230,12 +149,6 @@ export function useTutorSession() {
       return;
     }
     await runAction(action);
-  };
-
-  const setLearner = (value: string) => {
-    window.localStorage.setItem(LEARNER_STORAGE_KEY, value);
-    setLearnerId(value);
-    setError(null);
   };
 
   return {
@@ -256,11 +169,17 @@ export function useTutorSession() {
     completedStages,
     nextStage,
     progress,
+    planTree,
+    subjectMasteryScore,
     planCompleted,
+    pendingStatus,
+    focusMessageId,
+    clearFocusMessageId: () => setFocusMessageId(null),
     start,
     next,
     send,
     retry,
     setLearner,
+    loadCurrentLesson,
   };
 }

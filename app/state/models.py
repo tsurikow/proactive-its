@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -89,21 +89,6 @@ class TopicProgress(Base):
     )
 
 
-class StudyPlan(Base):
-    __tablename__ = "study_plans"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    learner_id: Mapped[str] = mapped_column(ForeignKey("learners.id"), nullable=False)
-    week_start: Mapped[date] = mapped_column(Date, nullable=False)
-    plan_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    status: Mapped[str] = mapped_column(String, nullable=False, default="active", server_default="active")
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-
-
 class PlanTemplate(Base):
     __tablename__ = "plan_templates"
 
@@ -157,7 +142,6 @@ class LearnerPlanState(Base):
 class LessonCache(Base):
     __tablename__ = "lesson_cache"
 
-    learner_id: Mapped[str] = mapped_column(ForeignKey("learners.id"), primary_key=True)
     template_id: Mapped[str] = mapped_column(ForeignKey("plan_templates.id"), primary_key=True)
     stage_index: Mapped[int] = mapped_column(Integer, primary_key=True)
     lesson_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
@@ -168,9 +152,26 @@ class LessonCache(Base):
     )
 
 
+class StartMessageCache(Base):
+    __tablename__ = "start_message_cache"
+
+    learner_id: Mapped[str] = mapped_column(ForeignKey("learners.id"), primary_key=True)
+    template_id: Mapped[str] = mapped_column(ForeignKey("plan_templates.id"), primary_key=True)
+    stage_index: Mapped[int] = mapped_column(Integer, primary_key=True)
+    completed_count: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plan_completed: Mapped[bool] = mapped_column(Boolean, primary_key=True)
+    profile_version: Mapped[str] = mapped_column(String, primary_key=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
 Index("idx_interactions_learner_created", Interaction.learner_id, Interaction.created_at.desc())
 Index("idx_topic_progress_learner_updated", TopicProgress.learner_id, TopicProgress.updated_at.desc())
-Index("idx_study_plans_learner_week", StudyPlan.learner_id, StudyPlan.week_start, unique=True)
 Index("idx_plan_templates_active", PlanTemplate.is_active)
 Index("idx_learner_plan_state_template", LearnerPlanState.template_id)
-Index("idx_lesson_cache_learner_updated", LessonCache.learner_id, LessonCache.updated_at.desc())
+Index("idx_lesson_cache_updated", LessonCache.updated_at.desc())
+Index("idx_start_message_cache_updated", StartMessageCache.updated_at.desc())

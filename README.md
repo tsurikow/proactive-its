@@ -12,7 +12,7 @@ Baseline proactive tutoring backend for Calculus I:
 - PostgreSQL + SQLAlchemy async + Alembic
 - Qdrant
 - OpenRouter (chat generation)
-- LangChain LCEL (`langchain-core`, `langchain-openai`, `langchain-qdrant`)
+- LangChain LCEL (`langchain-core`, `langchain-openai`)
 - OpenAI-compatible embeddings endpoint (Ollama/OpenAI/OpenRouter-compatible)
 
 ## Parent-child indexing
@@ -40,23 +40,26 @@ Default child chunk policy:
   - returns tutor intro + current stage/progress summary (fast path)
 - `/v1/lesson/current`
   - returns current stage lesson package
-  - generates lesson from full parent section markdown (`content_text_full`) in one LLM pass
-  - preserves figures/links/tables/non-prose blocks in-order with validation checks
-  - uses cache when source hash + generator version match
-  - returns `503` when LLM generation or preservation validation fails
+  - generates lesson from full parent section markdown (`content_text_full`) through a block-based LLM rewrite pipeline
+  - normalizes the section into generic document blocks, rewrites prose, and restores immutable blocks exactly
+  - preserves figures/tables/display math/code/raw HTML blocks in-order
+  - uses cache when source hash + generator version + prompt profile version match
+  - returns `503` when LLM generation fails
 - `/v1/next`
   - manually advances one stage
   - returns next stage info (no full lesson body)
 - lesson package (`lesson`) includes:
   - `lesson_steps[]` with `source_chunk_ids`
   - `section_summary_md`
+  - `generation_mode`
 
 ## Grounded chat behavior
 `/v1/chat` retrieves from `calc1_chunks` only and enforces strict grounding:
-- dense retrieval (`RAG_TOP_K_FETCH=24`) + lightweight rerank (`RAG_FINAL_K=6`)
+- dense retrieval with direct async Qdrant + local MMR (`RAG_TOP_K_FETCH=24`, `RAG_FINAL_K=6`)
 - weak-evidence refusal when score/evidence thresholds are not met
 - citations must be from retrieved chunk ids only
-- no deterministic answer fallback for malformed model output (returns 503 after repair attempt)
+- no deterministic answer fallback for malformed model output (returns 503)
+- current request filters remain explicit metadata filters; there is no custom heuristic text boost layer
 
 ## Quick start
 1. Create env file:
@@ -94,6 +97,7 @@ It uses React + Vite + Tailwind CSS v4.
 ```bash
 cd frontend
 npm install
+npm run generate:api
 npm run dev
 ```
 3. Open `http://localhost:5173`.
