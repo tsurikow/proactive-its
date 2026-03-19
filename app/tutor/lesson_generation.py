@@ -7,8 +7,8 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
-from app.core.config import Settings, get_settings
-from app.core.markdown_sanitize import sanitize_lesson_markdown
+from app.platform.config import Settings, get_settings
+from app.platform.markdown_sanitize import sanitize_lesson_markdown
 from app.tutor.document_blocks import (
     IMMUTABLE_BLOCK_TYPES,
     REWRITE_BLOCK_TYPES,
@@ -22,6 +22,7 @@ from app.tutor.document_blocks import (
 class SectionLessonGenerator:
     generator_version = "llm_block_rewrite_v1"
     prompt_profile_version = "lesson_prompt_v4"
+    rewrite_temperature = 0.35
 
     def __init__(self, settings: Settings | None = None, llm_client: AsyncOpenAI | None = None):
         self.settings = settings or get_settings()
@@ -122,7 +123,7 @@ class SectionLessonGenerator:
             ),
             user_prompt=prompt,
             timeout=self.settings.lesson_max_section_seconds,
-            temperature=0.35,
+            temperature=self.rewrite_temperature,
             err_label="lesson generation",
         )
 

@@ -68,6 +68,7 @@ export function useSessionBootstrap({
         {
           id: introMessageId,
           role: "system",
+          kind: "system",
           title: "Tutor",
           content: response.message,
         },
@@ -97,6 +98,7 @@ export function useSessionBootstrap({
         {
           id: nextMessageId(),
           role: "system",
+          kind: "system",
           title: "Tutor",
           content: response.message,
         },

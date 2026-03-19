@@ -24,7 +24,10 @@ export default function App() {
         />
 
         {session.error ? (
-          <div className="mx-4 mt-2 flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 sm:mx-6">
+          <div
+            data-testid="session-error"
+            className="mx-4 mt-2 flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 sm:mx-6"
+          >
             <span>{session.error.text}</span>
             {session.error.canRetry ? (
               <button

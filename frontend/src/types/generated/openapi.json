@@ -934,6 +934,75 @@
             ],
             "title": "Weak Evidence"
           },
+          "eligible_query_term_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eligible Query Term Count"
+          },
+          "matched_query_term_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched Query Term Count"
+          },
+          "matched_query_terms": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched Query Terms"
+          },
+          "query_overlap_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query Overlap Ratio"
+          },
+          "offtopic_suspected": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offtopic Suspected"
+          },
+          "weak_evidence_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weak Evidence Reason"
+          },
           "retrieval_mode": {
             "anyOf": [
               {

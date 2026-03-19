@@ -42,14 +42,15 @@ export function useChatSession({
     }
 
     setChatInput("");
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: nextMessageId(),
-        role: "user",
-        content: message,
-      },
-    ]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: nextMessageId(),
+          role: "user",
+          kind: "chat",
+          content: message,
+        },
+      ]);
 
     await runAction(async () => {
       const version = currentRequestVersion();
@@ -71,6 +72,7 @@ export function useChatSession({
         {
           id: answerId,
           role: "assistant",
+          kind: "chat",
           title: "Answer",
           content: response.answer_md,
           citations: response.citations,

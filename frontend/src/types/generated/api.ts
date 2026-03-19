@@ -350,6 +350,18 @@ export interface components {
             evidence_chars?: number | null;
             /** Weak Evidence */
             weak_evidence?: boolean | null;
+            /** Eligible Query Term Count */
+            eligible_query_term_count?: number | null;
+            /** Matched Query Term Count */
+            matched_query_term_count?: number | null;
+            /** Matched Query Terms */
+            matched_query_terms?: string[] | null;
+            /** Query Overlap Ratio */
+            query_overlap_ratio?: number | null;
+            /** Offtopic Suspected */
+            offtopic_suspected?: boolean | null;
+            /** Weak Evidence Reason */
+            weak_evidence_reason?: string | null;
             /** Retrieval Mode */
             retrieval_mode?: string | null;
             /** Timings Ms */

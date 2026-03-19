@@ -24,6 +24,7 @@ export function LearnerGate({ onSubmit }: LearnerGateProps) {
           Enter your learner ID to start and keep your progress in this browser.
         </p>
         <input
+          data-testid="learner-id-input"
           value={value}
           onChange={(event) => setValue(event.target.value)}
           placeholder="e.g. student-001"
@@ -31,6 +32,7 @@ export function LearnerGate({ onSubmit }: LearnerGateProps) {
           className="mt-4 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-[15px] outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
         />
         <button
+          data-testid="learner-submit"
           type="submit"
           className="mt-3 w-full rounded-xl bg-teal-600 px-4 py-2.5 font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
         >

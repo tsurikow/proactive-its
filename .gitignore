@@ -148,11 +148,19 @@ venv.bak/
 node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+
+# Local/private workspace material
+.local/
+/md/
+/evaluation/
+/var/
+/package-lock.json
 
 # Project data and local runtime artifacts
 data/**
 !data/.gitkeep
-summary.md
 
 # Spyder project settings
 .spyderproject

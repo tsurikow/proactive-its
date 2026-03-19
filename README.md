@@ -3,7 +3,7 @@
 Baseline proactive tutoring backend for Calculus I:
 - resume-aware tutor flow (`/v1/start`, `/v1/lesson/current`, `/v1/next`)
 - grounded Q&A with RAG (`/v1/chat`)
-- simple mastery updates (`/v1/feedback`)
+- evidence-backed mastery updates (`/v1/feedback`)
 - React/Vite frontend (`/frontend`) with chat + plan + LaTeX rendering
 
 ## Stack
@@ -14,52 +14,6 @@ Baseline proactive tutoring backend for Calculus I:
 - OpenRouter (chat generation)
 - LangChain LCEL (`langchain-core`, `langchain-openai`)
 - OpenAI-compatible embeddings endpoint (Ollama/OpenAI/OpenRouter-compatible)
-
-## Parent-child indexing
-Two Qdrant collections are used in one ingest pass:
-
-1. `calc1_sections` (parents)
-- one point per section/document
-- stores full cleaned section text (`content_text_full`)
-- used for section-level tutor packaging
-
-2. `calc1_chunks` (children)
-- semantic chunks per section
-- used for retrieval/citations in `/v1/chat`
-- includes metadata like `chunk_type`, `subsection_title`, `order_index`
-
-Default child chunk policy:
-- target: `900` tokens
-- overlap: `120` tokens
-- split preference: heading/labeled blocks/paragraph fallback
-
-## Tutor flow behavior
-- `/v1/start`
-  - ensures learner and stage state
-  - loads pre-generated default plan template
-  - returns tutor intro + current stage/progress summary (fast path)
-- `/v1/lesson/current`
-  - returns current stage lesson package
-  - generates lesson from full parent section markdown (`content_text_full`) through a block-based LLM rewrite pipeline
-  - normalizes the section into generic document blocks, rewrites prose, and restores immutable blocks exactly
-  - preserves figures/tables/display math/code/raw HTML blocks in-order
-  - uses cache when source hash + generator version + prompt profile version match
-  - returns `503` when LLM generation fails
-- `/v1/next`
-  - manually advances one stage
-  - returns next stage info (no full lesson body)
-- lesson package (`lesson`) includes:
-  - `lesson_steps[]` with `source_chunk_ids`
-  - `section_summary_md`
-  - `generation_mode`
-
-## Grounded chat behavior
-`/v1/chat` retrieves from `calc1_chunks` only and enforces strict grounding:
-- dense retrieval with direct async Qdrant + local MMR (`RAG_TOP_K_FETCH=24`, `RAG_FINAL_K=6`)
-- weak-evidence refusal when score/evidence thresholds are not met
-- citations must be from retrieved chunk ids only
-- no deterministic answer fallback for malformed model output (returns 503)
-- current request filters remain explicit metadata filters; there is no custom heuristic text boost layer
 
 ## Quick start
 1. Create env file:
@@ -81,16 +35,50 @@ uv sync
 ```bash
 docker compose up --build
 ```
+This brings up Postgres and Qdrant, runs the bootstrap container once, then starts the API.
 
-Development reset (ephemeral DB + rebuild):
+Fresh local reset:
 ```bash
 ./scripts/dev-reset-up.sh
 ```
-This reset keeps Qdrant vectors and recreates Postgres state only.
+This reset removes the Postgres volume, reruns bootstrap, and keeps the Qdrant volume intact.
 
-## Frontend (React + Vite)
-The frontend is in `/Users/bigboss/PycharmProjects/proactive-its/frontend`.
-It uses React + Vite + Tailwind CSS v4.
+## Bootstrap and migrations
+- FastAPI startup does not run migrations.
+- The bootstrap flow applies the single baseline Alembic revision and seeds the default plan template.
+
+Schema only:
+```bash
+uv run alembic upgrade head
+```
+
+Full local bootstrap:
+```bash
+uv run python scripts/bootstrap_runtime.py
+```
+
+## Index content
+```bash
+uv run python scripts/index_content.py --documents /path/to/documents.jsonl --recreate
+```
+
+Embedding budget preflight:
+```bash
+uv run python scripts/check_embedding_budget.py --documents /path/to/documents.jsonl
+```
+
+Expected output counters:
+- `docs`
+- `parents`
+- `children`
+
+## Export OpenAPI
+```bash
+uv run python scripts/export_openapi.py
+```
+
+## Frontend
+The frontend is in `frontend/` and uses React + Vite + Tailwind CSS v4.
 
 1. Run backend API first (`http://localhost:8000`).
 2. Start frontend:
@@ -104,38 +92,6 @@ npm run dev
 
 Frontend env:
 - `VITE_API_BASE_URL` (default: `/v1`, proxied by Vite to `http://localhost:8000`)
-
-The UI supports:
-- learner ID gate (stored in localStorage key `its.learner_id`)
-- Start -> current lesson -> next stage flow
-- grounded chat
-- Markdown + LaTeX rendering with KaTeX
-- study plan side panel
-
-## Migrations
-- App startup runs `alembic upgrade head`.
-- Manual:
-```bash
-uv run alembic revision -m "change"
-uv run alembic upgrade head
-```
-
-## Index content
-```bash
-uv run python scripts/index_content.py --documents /path/to/documents.jsonl --recreate
-```
-
-Expected output counters:
-- `docs`
-- `parents`
-- `children`
-
-Embedding budget preflight:
-```bash
-uv run python scripts/check_embedding_budget.py --documents /path/to/documents.jsonl
-```
-
-This reports longest parent sections and longest child chunks.
 
 ## API
 Base URL: `http://localhost:8000`

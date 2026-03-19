@@ -89,6 +89,7 @@ export function useTutorSession() {
         {
           id: nextMessageId(),
           role: "error",
+          kind: "error",
           title: "Request failed",
           content: normalized.message,
         },

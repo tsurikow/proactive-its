@@ -76,7 +76,10 @@ export function ChatPane({
         className="flex-1 overflow-y-auto px-4 pb-32 pt-4 sm:px-8 sm:pt-8 lg:px-12 lg:pt-10"
       >
         <div className="mx-auto max-w-3xl space-y-8">
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section
+            data-testid="current-section-card"
+            className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+          >
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-teal-700">
               <BookOpen className="h-4 w-4" />
               Current Section
@@ -90,33 +93,44 @@ export function ChatPane({
               Click <strong>Start Session</strong> to begin your tutor flow.
             </section>
           ) : (
-            messages.map((message) => (
-              <section
-                key={message.id}
-                ref={(node) => {
-                  messageRefs.current[message.id] = node;
-                }}
-                className={`rounded-2xl border p-5 shadow-sm ${
-                  message.role === "user"
-                    ? "ml-8 border-teal-200 bg-teal-50/60"
-                    : message.role === "system"
-                      ? "border-indigo-200 bg-indigo-50/50"
-                      : message.role === "error"
-                        ? "border-rose-200 bg-rose-50/70"
-                        : "border-slate-200 bg-white"
-                }`}
-              >
-                {message.title ? (
-                  <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-600">
-                    {message.title}
-                  </h3>
-                ) : null}
-                <MarkdownMath
-                  content={message.content}
-                  className="prose prose-slate max-w-none text-slate-700"
-                />
-              </section>
-            ))
+            <div data-testid="message-list" className="space-y-8">
+              {messages.map((message) => (
+                <section
+                  key={message.id}
+                  ref={(node) => {
+                    messageRefs.current[message.id] = node;
+                  }}
+                  data-testid={
+                    message.kind === "lesson"
+                      ? "lesson-message"
+                      : message.role === "assistant"
+                      ? "assistant-message"
+                      : message.role === "user"
+                        ? "user-message"
+                        : "feed-message"
+                  }
+                  className={`rounded-2xl border p-5 shadow-sm ${
+                    message.role === "user"
+                      ? "ml-8 border-teal-200 bg-teal-50/60"
+                      : message.role === "system"
+                        ? "border-indigo-200 bg-indigo-50/50"
+                        : message.role === "error"
+                          ? "border-rose-200 bg-rose-50/70"
+                          : "border-slate-200 bg-white"
+                  }`}
+                >
+                  {message.title ? (
+                    <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-600">
+                      {message.title}
+                    </h3>
+                  ) : null}
+                  <MarkdownMath
+                    content={message.content}
+                    className="prose prose-slate max-w-none text-slate-700"
+                  />
+                </section>
+              ))}
+            </div>
           )}
 
           {pendingStatus ? (
@@ -167,6 +181,7 @@ export function ChatPane({
               <MessageCircle className="h-6 w-6" />
             </div>
             <textarea
+              data-testid="chat-input"
               rows={1}
               placeholder="Ask the tutor to explain a step, or type a math question..."
               className="max-h-32 flex-1 resize-none bg-transparent py-3 leading-relaxed text-slate-700 outline-none placeholder:text-slate-400"
@@ -181,6 +196,7 @@ export function ChatPane({
               }}
             />
             <button
+              data-testid="chat-send-button"
               onClick={() => void onSend()}
               disabled={!chatInput.trim() || loading || !hasLearner}
               className={`rounded-xl p-3 transition-all ${

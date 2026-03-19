@@ -28,6 +28,7 @@ export function toLessonMessages(lesson: LessonPayload | null): FeedMessage[] {
   return steps.map((step) => ({
     id: messageId(),
     role: "assistant",
+    kind: "lesson",
     title: undefined,
     content: sanitizeLessonContent(step.content_md),
   }));

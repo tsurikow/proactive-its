@@ -73,6 +73,7 @@ export function useLessonLoader({
         {
           id: nextMessageId(),
           role: "error",
+          kind: "error",
           title: "Lesson fetch failed",
           content: normalized.message,
         },

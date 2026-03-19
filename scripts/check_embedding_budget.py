@@ -3,10 +3,10 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 
-from app.core.config import get_settings
-from app.ingest.chunker import split_markdown_into_chunks
-from app.ingest.io import clean_markdown, iter_documents
-from app.ingest.token_count import build_token_counter
+from app.content.chunker import split_markdown_into_chunks
+from app.content.io import clean_markdown, iter_documents
+from app.content.token_count import build_token_counter
+from app.platform.config import get_settings
 
 
 @dataclass

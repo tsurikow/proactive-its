@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 
-from app.ingest.indexer import IndexingService
+from app.content.indexer import IndexingService
 
 
 def main() -> None:
