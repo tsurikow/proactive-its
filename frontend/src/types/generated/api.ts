@@ -4,6 +4,108 @@
  */
 
 export interface paths {
+    "/v1/auth/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Signup */
+        post: operations["signup_v1_auth_signup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login */
+        post: operations["login_v1_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout */
+        post: operations["logout_v1_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/password-reset/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Password Reset Request */
+        post: operations["password_reset_request_v1_auth_password_reset_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Password Reset Confirm */
+        post: operations["password_reset_confirm_v1_auth_password_reset_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Me */
+        get: operations["me_v1_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/health": {
         parameters: {
             query?: never;
@@ -21,32 +123,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/start": {
+    "/v1/health/ready": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Start */
-        post: operations["start_v1_start_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/start-message": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Start Message */
-        get: operations["start_message_v1_start_message_get"];
+        /** Health Ready */
+        get: operations["health_ready_v1_health_ready_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -55,24 +140,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/lesson/current": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Lesson Current */
-        get: operations["lesson_current_v1_lesson_current_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/next": {
+    "/v1/teacher/session": {
         parameters: {
             query?: never;
             header?: never;
@@ -81,15 +149,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Next Item */
-        post: operations["next_item_v1_next_post"];
+        /** Teacher Session */
+        post: operations["teacher_session_v1_teacher_session_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/chat": {
+    "/v1/teacher/feedback": {
         parameters: {
             query?: never;
             header?: never;
@@ -98,25 +166,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Chat */
-        post: operations["chat_v1_chat_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/feedback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Post Feedback */
-        post: operations["post_feedback_v1_feedback_post"];
+        /** Teacher Feedback */
+        post: operations["teacher_feedback_v1_teacher_feedback_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -127,54 +178,116 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** ChatContext */
-        ChatContext: {
-            /** Current Module Id */
-            current_module_id?: string | null;
-            /** Current Section Id */
-            current_section_id?: string | null;
-        };
-        /** ChatRequest */
-        ChatRequest: {
-            /** Learner Id */
-            learner_id: string;
-            /** Message */
-            message: string;
-            context?: components["schemas"]["ChatContext"];
+        /** AnswerCheckContext */
+        AnswerCheckContext: {
+            /** Item Ref */
+            item_ref: string;
             /**
-             * Mode
-             * @default tutor
+             * Item Type
              * @enum {string}
              */
-            mode: "tutor" | "quiz";
+            item_type: "exercise" | "checkpoint" | "question";
+            /** Hidden Answer Ref */
+            hidden_answer_ref?: string | null;
+            /** Answer Source Excerpt */
+            answer_source_excerpt?: string | null;
+            /** Rubric Brief */
+            rubric_brief?: string | null;
+            /**
+             * Can Verify
+             * @default true
+             */
+            can_verify: boolean;
         };
-        /** ChatResponse */
-        ChatResponse: {
-            /** Interaction Id */
-            interaction_id: number;
-            /** Answer Md */
-            answer_md: string;
-            /** Citations */
-            citations: components["schemas"]["Citation"][];
-            retrieval_debug?: components["schemas"]["RetrievalDebug"] | null;
+        /** AuthLearner */
+        AuthLearner: {
+            /** Id */
+            id: string;
+            /** First Name */
+            first_name: string;
+            /** Last Name */
+            last_name: string;
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string;
+            /** Is Active */
+            is_active: boolean;
         };
-        /** Citation */
-        Citation: {
-            /** Chunk Id */
-            chunk_id: string;
-            /** Doc Id */
-            doc_id: string;
-            /** Title */
-            title: string;
-            /** Breadcrumb */
-            breadcrumb: string[];
-            /** Quote */
-            quote: string;
+        /** AuthResponse */
+        AuthResponse: {
+            learner: components["schemas"]["AuthLearner"];
+        };
+        /** BasicSuccessResponse */
+        BasicSuccessResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+        };
+        /** CheckpointCandidate */
+        CheckpointCandidate: {
+            /** Checkpoint Ref */
+            checkpoint_ref: string;
+            /** Prompt Excerpt */
+            prompt_excerpt: string;
+            /** Hidden Answer Ref */
+            hidden_answer_ref?: string | null;
+            /**
+             * Requires Answer Check
+             * @default true
+             */
+            requires_answer_check: boolean;
+        };
+        /** CheckpointEvaluation */
+        CheckpointEvaluation: {
+            status: components["schemas"]["CheckpointEvaluationStatus"];
+            /** Section Id */
+            section_id: string;
+            /** Exercise Ref */
+            exercise_ref?: string | null;
+            /**
+             * Evaluator Source
+             * @default teacher_graph
+             * @enum {string}
+             */
+            evaluator_source: "teacher_graph" | "fallback";
+            /**
+             * Hidden Answer Used
+             * @default true
+             */
+            hidden_answer_used: boolean;
+            /** Rationale */
+            rationale: string;
+            /** Teacher Feedback Brief */
+            teacher_feedback_brief: string;
+            /** Confidence */
+            confidence?: number | null;
+        };
+        /**
+         * CheckpointEvaluationStatus
+         * @enum {string}
+         */
+        CheckpointEvaluationStatus: "correct" | "incorrect" | "partial" | "skipped" | "unresolved";
+        /** ExerciseCandidate */
+        ExerciseCandidate: {
+            /** Exercise Ref */
+            exercise_ref: string;
+            /** Prompt Excerpt */
+            prompt_excerpt: string;
+            /** Hidden Answer Ref */
+            hidden_answer_ref?: string | null;
+            /**
+             * Requires Answer Check
+             * @default true
+             */
+            requires_answer_check: boolean;
         };
         /** FeedbackRequest */
         FeedbackRequest: {
             /** Learner Id */
-            learner_id: string;
+            learner_id?: string | null;
             /** Interaction Id */
             interaction_id: number;
             /** Confidence */
@@ -197,14 +310,46 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** LessonCurrentResponse */
-        LessonCurrentResponse: {
-            plan: components["schemas"]["PlanProgress"];
-            current_stage: components["schemas"]["StageInfo"] | null;
-            lesson: components["schemas"]["LessonPayload"] | null;
-            /** Plan Completed */
-            plan_completed: boolean;
+        /** LearnerSignalPayload */
+        LearnerSignalPayload: {
+            understanding_signal: components["schemas"]["LearnerUnderstandingSignal"];
+            /** Interaction Id */
+            interaction_id?: number | null;
         };
+        /**
+         * LearnerUnderstandingSignal
+         * @enum {string}
+         */
+        LearnerUnderstandingSignal: "confused" | "partial" | "clear";
+        /** LearningDebtItem */
+        LearningDebtItem: {
+            debt_kind: components["schemas"]["LearningDebtKind"];
+            /** Section Id */
+            section_id: string;
+            /** Module Id */
+            module_id?: string | null;
+            /** @default open */
+            status: components["schemas"]["LearningDebtStatus"];
+            /** Rationale */
+            rationale: string;
+            /** Source Interaction Id */
+            source_interaction_id?: number | null;
+            source_action_type?: components["schemas"]["TeacherActionType"] | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Resolved At */
+            resolved_at?: string | null;
+        };
+        /**
+         * LearningDebtKind
+         * @enum {string}
+         */
+        LearningDebtKind: "skipped_section" | "refused_revisit" | "unanswered_checkpoint" | "unattempted_exercise" | "unresolved_exercise" | "moved_on_weak";
+        /**
+         * LearningDebtStatus
+         * @enum {string}
+         */
+        LearningDebtStatus: "open" | "acknowledged" | "resolved";
         /** LessonPayload */
         LessonPayload: {
             /** Section Summary Md */
@@ -241,133 +386,78 @@ export interface components {
             /** Order Index */
             order_index: number;
         };
-        /** NextRequest */
-        NextRequest: {
-            /** Learner Id */
-            learner_id: string;
+        /** LoginRequest */
+        LoginRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+        };
+        /** PasswordResetConfirmRequest */
+        PasswordResetConfirmRequest: {
+            /** Token */
+            token: string;
+            /** New Password */
+            new_password: string;
+        };
+        /** PasswordResetRequest */
+        PasswordResetRequest: {
+            /** Email */
+            email: string;
+        };
+        /**
+         * SectionSemanticType
+         * @enum {string}
+         */
+        SectionSemanticType: "introduction" | "core_concept" | "formula_reference" | "worked_example" | "checkpoint" | "exercise_bank" | "review" | "transition";
+        /** SectionUnderstandingArtifact */
+        SectionUnderstandingArtifact: {
+            pedagogical_role: components["schemas"]["SectionSemanticType"];
+            /** Teaching Intent */
+            teaching_intent: string;
             /**
-             * Force
+             * Should Dwell
+             * @default true
+             */
+            should_dwell: boolean;
+            /**
+             * Supports Generated Question
              * @default false
              */
-            force: boolean;
-        };
-        /** NextResponse */
-        NextResponse: {
-            /** Message */
-            message: string;
-            plan: components["schemas"]["PlanProgress"];
-            current_stage: components["schemas"]["StageInfo"] | null;
-            /** Plan Completed */
-            plan_completed: boolean;
-        };
-        /** PlanProgress */
-        PlanProgress: {
-            /** Template Id */
-            template_id: string;
-            /** Total Stages */
-            total_stages: number;
-            /** Completed Stages */
-            completed_stages: number;
-            /**
-             * Mastery Score
-             * @default 0
-             */
-            mastery_score: number;
-            tree?: components["schemas"]["PlanTreeNode"] | null;
-        };
-        /** PlanTreeNode */
-        PlanTreeNode: {
-            /**
-             * Node Type
-             * @enum {string}
-             */
-            node_type: "book" | "group" | "stage";
+            supports_generated_question: boolean;
+            /** Explicit Exercises */
+            explicit_exercises?: components["schemas"]["ExerciseCandidate"][];
+            /** Explicit Checkpoints */
+            explicit_checkpoints?: components["schemas"]["CheckpointCandidate"][];
+            /** Answer Check Contexts */
+            answer_check_contexts?: components["schemas"]["AnswerCheckContext"][];
+            /** Recommended Actions */
+            recommended_actions?: components["schemas"]["TeacherActionType"][];
+            /** Rationale */
+            rationale: string;
+            /** Section Id */
+            section_id: string;
+            /** Source Hash */
+            source_hash: string;
+            /** Parent Doc Id */
+            parent_doc_id?: string | null;
             /** Title */
-            title: string;
+            title?: string | null;
             /** Breadcrumb */
             breadcrumb?: string[];
-            /** Children */
-            children?: components["schemas"]["PlanTreeNode"][];
-            /** Stage Index */
-            stage_index?: number | null;
-            /** Section Id */
-            section_id?: string | null;
-            /** Module Id */
-            module_id?: string | null;
-            /** Completed */
-            completed?: boolean | null;
-            /**
-             * Completed Leaf Count
-             * @default 0
-             */
-            completed_leaf_count: number;
-            /**
-             * Total Leaf Count
-             * @default 0
-             */
-            total_leaf_count: number;
-            /**
-             * Mastery Score
-             * @default 0
-             */
-            mastery_score: number;
-            /**
-             * Is Current Branch
-             * @default false
-             */
-            is_current_branch: boolean;
-            /**
-             * Is Current Stage
-             * @default false
-             */
-            is_current_stage: boolean;
+            /** Context Version */
+            context_version: string;
         };
-        /** RetrievalDebug */
-        RetrievalDebug: {
-            /** Top K */
-            top_k: number;
-            /** Filtered By */
-            filtered_by: {
-                [key: string]: string;
-            };
-            /** Scores */
-            scores: {
-                [key: string]: number | string;
-            }[];
-            /** Top Score */
-            top_score?: number | null;
-            /** Citation Fallback Used */
-            citation_fallback_used?: boolean | null;
-            /** Rewrite Attempted */
-            rewrite_attempted?: boolean | null;
-            /** Rewrite Query */
-            rewrite_query?: string | null;
-            /** Rewrite Accepted */
-            rewrite_accepted?: boolean | null;
-            /** Rewrite Reason */
-            rewrite_reason?: string | null;
-            /** Evidence Chars */
-            evidence_chars?: number | null;
-            /** Weak Evidence */
-            weak_evidence?: boolean | null;
-            /** Eligible Query Term Count */
-            eligible_query_term_count?: number | null;
-            /** Matched Query Term Count */
-            matched_query_term_count?: number | null;
-            /** Matched Query Terms */
-            matched_query_terms?: string[] | null;
-            /** Query Overlap Ratio */
-            query_overlap_ratio?: number | null;
-            /** Offtopic Suspected */
-            offtopic_suspected?: boolean | null;
-            /** Weak Evidence Reason */
-            weak_evidence_reason?: string | null;
-            /** Retrieval Mode */
-            retrieval_mode?: string | null;
-            /** Timings Ms */
-            timings_ms?: {
-                [key: string]: number;
-            } | null;
+        /** SignupRequest */
+        SignupRequest: {
+            /** First Name */
+            first_name: string;
+            /** Last Name */
+            last_name: string;
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
         };
         /** StageInfo */
         StageInfo: {
@@ -384,27 +474,127 @@ export interface components {
             /** Breadcrumb */
             breadcrumb?: string[];
         };
-        /** StartMessageResponse */
-        StartMessageResponse: {
-            /** Message */
-            message: string;
-            current_stage: components["schemas"]["StageInfo"] | null;
-            /** Plan Completed */
-            plan_completed: boolean;
+        /** TeacherAction */
+        TeacherAction: {
+            action_type: components["schemas"]["TeacherActionType"];
+            /** Rationale */
+            rationale: string;
+            /** Section Id */
+            section_id?: string | null;
+            /** Module Id */
+            module_id?: string | null;
+            /** Target Section Id */
+            target_section_id?: string | null;
+            /** Prompt Instruction */
+            prompt_instruction?: string | null;
+            /** Question Prompt */
+            question_prompt?: string | null;
+            /** Exercise Ref */
+            exercise_ref?: string | null;
+            /** Hidden Answer Ref */
+            hidden_answer_ref?: string | null;
+            /**
+             * Requires Learner Reply
+             * @default true
+             */
+            requires_learner_reply: boolean;
+            /**
+             * Allows Move On
+             * @default true
+             */
+            allows_move_on: boolean;
         };
-        /** StartRequest */
-        StartRequest: {
+        /**
+         * TeacherActionType
+         * @enum {string}
+         */
+        TeacherActionType: "teach_section" | "ask_section_question" | "assign_section_exercise" | "check_student_answer" | "propose_continue" | "propose_advance" | "propose_revisit" | "propose_skip" | "acknowledge_choice" | "clarify_student_question" | "summarize_progress" | "wait_for_student_reply";
+        /** TeacherProposal */
+        TeacherProposal: {
+            proposal_type: components["schemas"]["TeacherProposalType"];
+            /** Rationale */
+            rationale: string;
+            /** Target Section Id */
+            target_section_id?: string | null;
+            /** Target Module Id */
+            target_module_id?: string | null;
+            /** Target Title */
+            target_title?: string | null;
+            /**
+             * Can Defer
+             * @default true
+             */
+            can_defer: boolean;
+        };
+        /**
+         * TeacherProposalType
+         * @enum {string}
+         */
+        TeacherProposalType: "continue_current_section" | "advance_to_next_section" | "revisit_previous_section" | "skip_current_section";
+        /** TeacherSessionContext */
+        TeacherSessionContext: {
+            /** Current Module Id */
+            current_module_id?: string | null;
+            /** Current Section Id */
+            current_section_id?: string | null;
+            /** Interaction Id */
+            interaction_id?: number | null;
+        };
+        /**
+         * TeacherSessionEventType
+         * @enum {string}
+         */
+        TeacherSessionEventType: "open_session" | "learner_reply" | "request_move_on" | "accept_proposal" | "refuse_proposal" | "continue_session";
+        /** TeacherSessionRequest */
+        TeacherSessionRequest: {
             /** Learner Id */
-            learner_id: string;
-        };
-        /** StartResponse */
-        StartResponse: {
+            learner_id?: string | null;
+            event_type: components["schemas"]["TeacherSessionEventType"];
             /** Message */
-            message: string;
-            plan: components["schemas"]["PlanProgress"];
-            current_stage: components["schemas"]["StageInfo"] | null;
-            /** Plan Completed */
+            message?: string | null;
+            context?: components["schemas"]["TeacherSessionContext"];
+            learner_signal?: components["schemas"]["LearnerSignalPayload"] | null;
+            proposal_type?: components["schemas"]["TeacherProposalType"] | null;
+            /**
+             * Force Move
+             * @default false
+             */
+            force_move: boolean;
+        };
+        /** TeacherSessionResult */
+        TeacherSessionResult: {
+            /** Teacher Message */
+            teacher_message: string;
+            teacher_action: components["schemas"]["TeacherAction"];
+            proposal?: components["schemas"]["TeacherProposal"] | null;
+            checkpoint_evaluation?: components["schemas"]["CheckpointEvaluation"] | null;
+            /** Debt Updates */
+            debt_updates?: components["schemas"]["LearningDebtItem"][];
+            section_understanding?: components["schemas"]["SectionUnderstandingArtifact"] | null;
+            /** Current Stage */
+            current_stage?: {
+                [key: string]: unknown;
+            } | null;
+            /** Plan */
+            plan?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Plan Completed
+             * @default false
+             */
             plan_completed: boolean;
+            lesson?: components["schemas"]["LessonPayload"] | null;
+            /** Interaction Id */
+            interaction_id?: number | null;
+            /** Citations */
+            citations?: {
+                [key: string]: unknown;
+            }[];
+            /** Retrieval Debug */
+            retrieval_debug?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -428,6 +618,178 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    signup_v1_auth_signup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    login_v1_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_v1_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasicSuccessResponse"];
+                };
+            };
+        };
+    };
+    password_reset_request_v1_auth_password_reset_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasicSuccessResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    password_reset_confirm_v1_auth_password_reset_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasicSuccessResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    me_v1_auth_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+        };
+    };
     health_v1_health_get: {
         parameters: {
             query?: never;
@@ -450,44 +812,9 @@ export interface operations {
             };
         };
     };
-    start_v1_start_post: {
+    health_ready_v1_health_ready_get: {
         parameters: {
             query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StartRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StartResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    start_message_v1_start_message_get: {
-        parameters: {
-            query: {
-                learner_id: string;
-            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -500,52 +827,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StartMessageResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
     };
-    lesson_current_v1_lesson_current_get: {
-        parameters: {
-            query: {
-                learner_id: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LessonCurrentResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    next_item_v1_next_post: {
+    teacher_session_v1_teacher_session_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -554,7 +843,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NextRequest"];
+                "application/json": components["schemas"]["TeacherSessionRequest"];
             };
         };
         responses: {
@@ -564,7 +853,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NextResponse"];
+                    "application/json": components["schemas"]["TeacherSessionResult"];
                 };
             };
             /** @description Validation Error */
@@ -578,40 +867,7 @@ export interface operations {
             };
         };
     };
-    chat_v1_chat_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChatRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChatResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_feedback_v1_feedback_post: {
+    teacher_feedback_v1_teacher_feedback_post: {
         parameters: {
             query?: never;
             header?: never;

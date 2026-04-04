@@ -4,19 +4,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
-class ChatContext(BaseModel):
-    current_module_id: str | None = None
-    current_section_id: str | None = None
-
-
-class ChatRequest(BaseModel):
-    learner_id: str
-    message: str
-    context: ChatContext = Field(default_factory=ChatContext)
-    mode: Literal["tutor", "quiz"] = "tutor"
-
-
 class Citation(BaseModel):
     chunk_id: str
     doc_id: str
@@ -47,27 +34,55 @@ class RetrievalDebug(BaseModel):
     timings_ms: dict[str, float] | None = None
 
 
-class ChatResponse(BaseModel):
-    interaction_id: int
-    answer_md: str
-    citations: list[Citation]
-    retrieval_debug: RetrievalDebug | None = None
-
-
 class FeedbackRequest(BaseModel):
-    learner_id: str
+    learner_id: str | None = None
     interaction_id: int
     confidence: int = Field(ge=1, le=5)
     helpful: bool | None = None
 
 
-class StartRequest(BaseModel):
-    learner_id: str
+class AuthLearner(BaseModel):
+    id: str
+    first_name: str
+    last_name: str
+    display_name: str
+    email: str
+    is_active: bool
 
 
-class NextRequest(BaseModel):
-    learner_id: str
-    force: bool = False
+class AuthResponse(BaseModel):
+    learner: AuthLearner
+
+
+class AuthErrorResponse(BaseModel):
+    code: str
+    message: str
+    field_errors: dict[str, str] | None = None
+
+
+class SignupRequest(BaseModel):
+    first_name: str = Field(min_length=1, max_length=80)
+    last_name: str = Field(min_length=1, max_length=80)
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class PasswordResetRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class BasicSuccessResponse(BaseModel):
+    ok: bool = True
 
 
 class StageInfo(BaseModel):
@@ -118,33 +133,6 @@ class PlanProgress(BaseModel):
     completed_stages: int
     mastery_score: float = 0.0
     tree: PlanTreeNode | None = None
-
-
-class StartResponse(BaseModel):
-    message: str
-    plan: PlanProgress
-    current_stage: StageInfo | None
-    plan_completed: bool
-
-
-class StartMessageResponse(BaseModel):
-    message: str
-    current_stage: StageInfo | None
-    plan_completed: bool
-
-
-class NextResponse(BaseModel):
-    message: str
-    plan: PlanProgress
-    current_stage: StageInfo | None
-    plan_completed: bool
-
-
-class LessonCurrentResponse(BaseModel):
-    plan: PlanProgress
-    current_stage: StageInfo | None
-    lesson: LessonPayload | None
-    plan_completed: bool
 
 
 class FeedbackResponse(BaseModel):

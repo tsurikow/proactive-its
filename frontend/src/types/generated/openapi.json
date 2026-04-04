@@ -5,6 +5,194 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/v1/auth/signup": {
+      "post": {
+        "summary": "Signup",
+        "operationId": "signup_v1_auth_signup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "summary": "Login",
+        "operationId": "login_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "summary": "Logout",
+        "operationId": "logout_v1_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BasicSuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/password-reset/request": {
+      "post": {
+        "summary": "Password Reset Request",
+        "operationId": "password_reset_request_v1_auth_password_reset_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BasicSuccessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/password-reset/confirm": {
+      "post": {
+        "summary": "Password Reset Confirm",
+        "operationId": "password_reset_confirm_v1_auth_password_reset_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BasicSuccessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/me": {
+      "get": {
+        "summary": "Me",
+        "operationId": "me_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/health": {
       "get": {
         "summary": "Health",
@@ -27,77 +215,19 @@
         }
       }
     },
-    "/v1/start": {
-      "post": {
-        "summary": "Start",
-        "operationId": "start_v1_start_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StartRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StartResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/start-message": {
+    "/v1/health/ready": {
       "get": {
-        "summary": "Start Message",
-        "operationId": "start_message_v1_start_message_get",
-        "parameters": [
-          {
-            "name": "learner_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "title": "Learner Id"
-            }
-          }
-        ],
+        "summary": "Health Ready",
+        "operationId": "health_ready_v1_health_ready_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StartMessageResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Ready V1 Health Ready Get"
                 }
               }
             }
@@ -105,55 +235,15 @@
         }
       }
     },
-    "/v1/lesson/current": {
-      "get": {
-        "summary": "Lesson Current",
-        "operationId": "lesson_current_v1_lesson_current_get",
-        "parameters": [
-          {
-            "name": "learner_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "title": "Learner Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LessonCurrentResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/next": {
+    "/v1/teacher/session": {
       "post": {
-        "summary": "Next Item",
-        "operationId": "next_item_v1_next_post",
+        "summary": "Teacher Session",
+        "operationId": "teacher_session_v1_teacher_session_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NextRequest"
+                "$ref": "#/components/schemas/TeacherSessionRequest"
               }
             }
           },
@@ -165,7 +255,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NextResponse"
+                  "$ref": "#/components/schemas/TeacherSessionResult"
                 }
               }
             }
@@ -183,48 +273,10 @@
         }
       }
     },
-    "/v1/chat": {
+    "/v1/teacher/feedback": {
       "post": {
-        "summary": "Chat",
-        "operationId": "chat_v1_chat_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChatRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChatResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/feedback": {
-      "post": {
-        "summary": "Post Feedback",
-        "operationId": "post_feedback_v1_feedback_post",
+        "summary": "Teacher Feedback",
+        "operationId": "teacher_feedback_v1_teacher_feedback_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -262,140 +314,302 @@
   },
   "components": {
     "schemas": {
-      "ChatContext": {
+      "AnswerCheckContext": {
         "properties": {
-          "current_module_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Current Module Id"
-          },
-          "current_section_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Current Section Id"
-          }
-        },
-        "type": "object",
-        "title": "ChatContext"
-      },
-      "ChatRequest": {
-        "properties": {
-          "learner_id": {
+          "item_ref": {
             "type": "string",
-            "title": "Learner Id"
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Item Ref"
           },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          },
-          "context": {
-            "$ref": "#/components/schemas/ChatContext"
-          },
-          "mode": {
+          "item_type": {
             "type": "string",
             "enum": [
-              "tutor",
-              "quiz"
+              "exercise",
+              "checkpoint",
+              "question"
             ],
-            "title": "Mode",
-            "default": "tutor"
-          }
-        },
-        "type": "object",
-        "required": [
-          "learner_id",
-          "message"
-        ],
-        "title": "ChatRequest"
-      },
-      "ChatResponse": {
-        "properties": {
-          "interaction_id": {
-            "type": "integer",
-            "title": "Interaction Id"
+            "title": "Item Type"
           },
-          "answer_md": {
-            "type": "string",
-            "title": "Answer Md"
-          },
-          "citations": {
-            "items": {
-              "$ref": "#/components/schemas/Citation"
-            },
-            "type": "array",
-            "title": "Citations"
-          },
-          "retrieval_debug": {
+          "hidden_answer_ref": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/RetrievalDebug"
+                "type": "string",
+                "maxLength": 200
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Hidden Answer Ref"
+          },
+          "answer_source_excerpt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 700
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Source Excerpt"
+          },
+          "rubric_brief": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rubric Brief"
+          },
+          "can_verify": {
+            "type": "boolean",
+            "title": "Can Verify",
+            "default": true
           }
         },
         "type": "object",
         "required": [
-          "interaction_id",
-          "answer_md",
-          "citations"
+          "item_ref",
+          "item_type"
         ],
-        "title": "ChatResponse"
+        "title": "AnswerCheckContext"
       },
-      "Citation": {
+      "AuthLearner": {
         "properties": {
-          "chunk_id": {
+          "id": {
             "type": "string",
-            "title": "Chunk Id"
+            "title": "Id"
           },
-          "doc_id": {
+          "first_name": {
             "type": "string",
-            "title": "Doc Id"
+            "title": "First Name"
           },
-          "title": {
+          "last_name": {
             "type": "string",
-            "title": "Title"
+            "title": "Last Name"
           },
-          "breadcrumb": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Breadcrumb"
-          },
-          "quote": {
+          "display_name": {
             "type": "string",
-            "title": "Quote"
+            "title": "Display Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
           }
         },
         "type": "object",
         "required": [
-          "chunk_id",
-          "doc_id",
-          "title",
-          "breadcrumb",
-          "quote"
+          "id",
+          "first_name",
+          "last_name",
+          "display_name",
+          "email",
+          "is_active"
         ],
-        "title": "Citation"
+        "title": "AuthLearner"
+      },
+      "AuthResponse": {
+        "properties": {
+          "learner": {
+            "$ref": "#/components/schemas/AuthLearner"
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner"
+        ],
+        "title": "AuthResponse"
+      },
+      "BasicSuccessResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "BasicSuccessResponse"
+      },
+      "CheckpointCandidate": {
+        "properties": {
+          "checkpoint_ref": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Checkpoint Ref"
+          },
+          "prompt_excerpt": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Prompt Excerpt"
+          },
+          "hidden_answer_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden Answer Ref"
+          },
+          "requires_answer_check": {
+            "type": "boolean",
+            "title": "Requires Answer Check",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkpoint_ref",
+          "prompt_excerpt"
+        ],
+        "title": "CheckpointCandidate"
+      },
+      "CheckpointEvaluation": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/CheckpointEvaluationStatus"
+          },
+          "section_id": {
+            "type": "string",
+            "title": "Section Id"
+          },
+          "exercise_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exercise Ref"
+          },
+          "evaluator_source": {
+            "type": "string",
+            "enum": [
+              "teacher_graph",
+              "fallback"
+            ],
+            "title": "Evaluator Source",
+            "default": "teacher_graph"
+          },
+          "hidden_answer_used": {
+            "type": "boolean",
+            "title": "Hidden Answer Used",
+            "default": true
+          },
+          "rationale": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Rationale"
+          },
+          "teacher_feedback_brief": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Teacher Feedback Brief"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "section_id",
+          "rationale",
+          "teacher_feedback_brief"
+        ],
+        "title": "CheckpointEvaluation"
+      },
+      "CheckpointEvaluationStatus": {
+        "type": "string",
+        "enum": [
+          "correct",
+          "incorrect",
+          "partial",
+          "skipped",
+          "unresolved"
+        ],
+        "title": "CheckpointEvaluationStatus"
+      },
+      "ExerciseCandidate": {
+        "properties": {
+          "exercise_ref": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Exercise Ref"
+          },
+          "prompt_excerpt": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Prompt Excerpt"
+          },
+          "hidden_answer_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden Answer Ref"
+          },
+          "requires_answer_check": {
+            "type": "boolean",
+            "title": "Requires Answer Check",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "exercise_ref",
+          "prompt_excerpt"
+        ],
+        "title": "ExerciseCandidate"
       },
       "FeedbackRequest": {
         "properties": {
           "learner_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Learner Id"
           },
           "interaction_id": {
@@ -422,7 +636,6 @@
         },
         "type": "object",
         "required": [
-          "learner_id",
           "interaction_id",
           "confidence"
         ],
@@ -480,44 +693,142 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
-      "LessonCurrentResponse": {
+      "LearnerSignalPayload": {
         "properties": {
-          "plan": {
-            "$ref": "#/components/schemas/PlanProgress"
+          "understanding_signal": {
+            "$ref": "#/components/schemas/LearnerUnderstandingSignal"
           },
-          "current_stage": {
+          "interaction_id": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/StageInfo"
+                "type": "integer"
               },
               {
                 "type": "null"
               }
-            ]
-          },
-          "lesson": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/LessonPayload"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "plan_completed": {
-            "type": "boolean",
-            "title": "Plan Completed"
+            ],
+            "title": "Interaction Id"
           }
         },
         "type": "object",
         "required": [
-          "plan",
-          "current_stage",
-          "lesson",
-          "plan_completed"
+          "understanding_signal"
         ],
-        "title": "LessonCurrentResponse"
+        "title": "LearnerSignalPayload"
+      },
+      "LearnerUnderstandingSignal": {
+        "type": "string",
+        "enum": [
+          "confused",
+          "partial",
+          "clear"
+        ],
+        "title": "LearnerUnderstandingSignal"
+      },
+      "LearningDebtItem": {
+        "properties": {
+          "debt_kind": {
+            "$ref": "#/components/schemas/LearningDebtKind"
+          },
+          "section_id": {
+            "type": "string",
+            "title": "Section Id"
+          },
+          "module_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LearningDebtStatus",
+            "default": "open"
+          },
+          "rationale": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Rationale"
+          },
+          "source_interaction_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Interaction Id"
+          },
+          "source_action_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeacherActionType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "debt_kind",
+          "section_id",
+          "rationale"
+        ],
+        "title": "LearningDebtItem"
+      },
+      "LearningDebtKind": {
+        "type": "string",
+        "enum": [
+          "skipped_section",
+          "refused_revisit",
+          "unanswered_checkpoint",
+          "unattempted_exercise",
+          "unresolved_exercise",
+          "moved_on_weak"
+        ],
+        "title": "LearningDebtKind"
+      },
+      "LearningDebtStatus": {
+        "type": "string",
+        "enum": [
+          "open",
+          "acknowledged",
+          "resolved"
+        ],
+        "title": "LearningDebtStatus"
       },
       "LessonPayload": {
         "properties": {
@@ -621,108 +932,166 @@
         ],
         "title": "LessonStep"
       },
-      "NextRequest": {
+      "LoginRequest": {
         "properties": {
-          "learner_id": {
+          "email": {
             "type": "string",
-            "title": "Learner Id"
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email"
           },
-          "force": {
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "PasswordResetConfirmRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Token"
+          },
+          "new_password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "New Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "new_password"
+        ],
+        "title": "PasswordResetConfirmRequest"
+      },
+      "PasswordResetRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "PasswordResetRequest"
+      },
+      "SectionSemanticType": {
+        "type": "string",
+        "enum": [
+          "introduction",
+          "core_concept",
+          "formula_reference",
+          "worked_example",
+          "checkpoint",
+          "exercise_bank",
+          "review",
+          "transition"
+        ],
+        "title": "SectionSemanticType"
+      },
+      "SectionUnderstandingArtifact": {
+        "properties": {
+          "pedagogical_role": {
+            "$ref": "#/components/schemas/SectionSemanticType"
+          },
+          "teaching_intent": {
+            "type": "string",
+            "maxLength": 1200,
+            "minLength": 1,
+            "title": "Teaching Intent"
+          },
+          "should_dwell": {
             "type": "boolean",
-            "title": "Force",
+            "title": "Should Dwell",
+            "default": true
+          },
+          "supports_generated_question": {
+            "type": "boolean",
+            "title": "Supports Generated Question",
             "default": false
-          }
-        },
-        "type": "object",
-        "required": [
-          "learner_id"
-        ],
-        "title": "NextRequest"
-      },
-      "NextResponse": {
-        "properties": {
-          "message": {
+          },
+          "explicit_exercises": {
+            "items": {
+              "$ref": "#/components/schemas/ExerciseCandidate"
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Explicit Exercises"
+          },
+          "explicit_checkpoints": {
+            "items": {
+              "$ref": "#/components/schemas/CheckpointCandidate"
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Explicit Checkpoints"
+          },
+          "answer_check_contexts": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerCheckContext"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Answer Check Contexts"
+          },
+          "recommended_actions": {
+            "items": {
+              "$ref": "#/components/schemas/TeacherActionType"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Recommended Actions"
+          },
+          "rationale": {
             "type": "string",
-            "title": "Message"
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Rationale"
           },
-          "plan": {
-            "$ref": "#/components/schemas/PlanProgress"
+          "section_id": {
+            "type": "string",
+            "title": "Section Id"
           },
-          "current_stage": {
+          "source_hash": {
+            "type": "string",
+            "title": "Source Hash"
+          },
+          "parent_doc_id": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/StageInfo"
+                "type": "string"
               },
               {
                 "type": "null"
               }
-            ]
-          },
-          "plan_completed": {
-            "type": "boolean",
-            "title": "Plan Completed"
-          }
-        },
-        "type": "object",
-        "required": [
-          "message",
-          "plan",
-          "current_stage",
-          "plan_completed"
-        ],
-        "title": "NextResponse"
-      },
-      "PlanProgress": {
-        "properties": {
-          "template_id": {
-            "type": "string",
-            "title": "Template Id"
-          },
-          "total_stages": {
-            "type": "integer",
-            "title": "Total Stages"
-          },
-          "completed_stages": {
-            "type": "integer",
-            "title": "Completed Stages"
-          },
-          "mastery_score": {
-            "type": "number",
-            "title": "Mastery Score",
-            "default": 0.0
-          },
-          "tree": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanTreeNode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "template_id",
-          "total_stages",
-          "completed_stages"
-        ],
-        "title": "PlanProgress"
-      },
-      "PlanTreeNode": {
-        "properties": {
-          "node_type": {
-            "type": "string",
-            "enum": [
-              "book",
-              "group",
-              "stage"
             ],
-            "title": "Node Type"
+            "title": "Parent Doc Id"
           },
           "title": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Title"
           },
           "breadcrumb": {
@@ -730,312 +1099,60 @@
               "type": "string"
             },
             "type": "array",
+            "maxItems": 12,
             "title": "Breadcrumb"
           },
-          "children": {
-            "items": {
-              "$ref": "#/components/schemas/PlanTreeNode"
-            },
-            "type": "array",
-            "title": "Children"
-          },
-          "stage_index": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stage Index"
-          },
-          "section_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Section Id"
-          },
-          "module_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Module Id"
-          },
-          "completed": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completed"
-          },
-          "completed_leaf_count": {
-            "type": "integer",
-            "title": "Completed Leaf Count",
-            "default": 0
-          },
-          "total_leaf_count": {
-            "type": "integer",
-            "title": "Total Leaf Count",
-            "default": 0
-          },
-          "mastery_score": {
-            "type": "number",
-            "title": "Mastery Score",
-            "default": 0.0
-          },
-          "is_current_branch": {
-            "type": "boolean",
-            "title": "Is Current Branch",
-            "default": false
-          },
-          "is_current_stage": {
-            "type": "boolean",
-            "title": "Is Current Stage",
-            "default": false
+          "context_version": {
+            "type": "string",
+            "title": "Context Version"
           }
         },
         "type": "object",
         "required": [
-          "node_type",
-          "title"
+          "pedagogical_role",
+          "teaching_intent",
+          "rationale",
+          "section_id",
+          "source_hash",
+          "context_version"
         ],
-        "title": "PlanTreeNode"
+        "title": "SectionUnderstandingArtifact"
       },
-      "RetrievalDebug": {
+      "SignupRequest": {
         "properties": {
-          "top_k": {
-            "type": "integer",
-            "title": "Top K"
+          "first_name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "First Name"
           },
-          "filtered_by": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Filtered By"
+          "last_name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Last Name"
           },
-          "scores": {
-            "items": {
-              "additionalProperties": {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Scores"
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email"
           },
-          "top_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Top Score"
-          },
-          "citation_fallback_used": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Citation Fallback Used"
-          },
-          "rewrite_attempted": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rewrite Attempted"
-          },
-          "rewrite_query": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rewrite Query"
-          },
-          "rewrite_accepted": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rewrite Accepted"
-          },
-          "rewrite_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rewrite Reason"
-          },
-          "evidence_chars": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Evidence Chars"
-          },
-          "weak_evidence": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Weak Evidence"
-          },
-          "eligible_query_term_count": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Eligible Query Term Count"
-          },
-          "matched_query_term_count": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Matched Query Term Count"
-          },
-          "matched_query_terms": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Matched Query Terms"
-          },
-          "query_overlap_ratio": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Query Overlap Ratio"
-          },
-          "offtopic_suspected": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Offtopic Suspected"
-          },
-          "weak_evidence_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Weak Evidence Reason"
-          },
-          "retrieval_mode": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Retrieval Mode"
-          },
-          "timings_ms": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "number"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Timings Ms"
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Password"
           }
         },
         "type": "object",
         "required": [
-          "top_k",
-          "filtered_by",
-          "scores"
+          "first_name",
+          "last_name",
+          "email",
+          "password"
         ],
-        "title": "RetrievalDebug"
+        "title": "SignupRequest"
       },
       "StageInfo": {
         "properties": {
@@ -1095,80 +1212,439 @@
         ],
         "title": "StageInfo"
       },
-      "StartMessageResponse": {
+      "TeacherAction": {
         "properties": {
-          "message": {
-            "type": "string",
-            "title": "Message"
+          "action_type": {
+            "$ref": "#/components/schemas/TeacherActionType"
           },
-          "current_stage": {
+          "rationale": {
+            "type": "string",
+            "maxLength": 1200,
+            "minLength": 1,
+            "title": "Rationale"
+          },
+          "section_id": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/StageInfo"
+                "type": "string"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Section Id"
           },
-          "plan_completed": {
+          "module_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module Id"
+          },
+          "target_section_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Section Id"
+          },
+          "prompt_instruction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Instruction"
+          },
+          "question_prompt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 400
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Prompt"
+          },
+          "exercise_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exercise Ref"
+          },
+          "hidden_answer_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden Answer Ref"
+          },
+          "requires_learner_reply": {
             "type": "boolean",
-            "title": "Plan Completed"
+            "title": "Requires Learner Reply",
+            "default": true
+          },
+          "allows_move_on": {
+            "type": "boolean",
+            "title": "Allows Move On",
+            "default": true
           }
         },
         "type": "object",
         "required": [
-          "message",
-          "current_stage",
-          "plan_completed"
+          "action_type",
+          "rationale"
         ],
-        "title": "StartMessageResponse"
+        "title": "TeacherAction"
       },
-      "StartRequest": {
+      "TeacherActionType": {
+        "type": "string",
+        "enum": [
+          "teach_section",
+          "ask_section_question",
+          "assign_section_exercise",
+          "check_student_answer",
+          "propose_continue",
+          "propose_advance",
+          "propose_revisit",
+          "propose_skip",
+          "acknowledge_choice",
+          "clarify_student_question",
+          "summarize_progress",
+          "wait_for_student_reply"
+        ],
+        "title": "TeacherActionType"
+      },
+      "TeacherProposal": {
+        "properties": {
+          "proposal_type": {
+            "$ref": "#/components/schemas/TeacherProposalType"
+          },
+          "rationale": {
+            "type": "string",
+            "maxLength": 1200,
+            "minLength": 1,
+            "title": "Rationale"
+          },
+          "target_section_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Section Id"
+          },
+          "target_module_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Module Id"
+          },
+          "target_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Title"
+          },
+          "can_defer": {
+            "type": "boolean",
+            "title": "Can Defer",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "proposal_type",
+          "rationale"
+        ],
+        "title": "TeacherProposal"
+      },
+      "TeacherProposalType": {
+        "type": "string",
+        "enum": [
+          "continue_current_section",
+          "advance_to_next_section",
+          "revisit_previous_section",
+          "skip_current_section"
+        ],
+        "title": "TeacherProposalType"
+      },
+      "TeacherSessionContext": {
+        "properties": {
+          "current_module_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Module Id"
+          },
+          "current_section_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Section Id"
+          },
+          "interaction_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interaction Id"
+          }
+        },
+        "type": "object",
+        "title": "TeacherSessionContext"
+      },
+      "TeacherSessionEventType": {
+        "type": "string",
+        "enum": [
+          "open_session",
+          "learner_reply",
+          "request_move_on",
+          "accept_proposal",
+          "refuse_proposal",
+          "continue_session"
+        ],
+        "title": "TeacherSessionEventType"
+      },
+      "TeacherSessionRequest": {
         "properties": {
           "learner_id": {
-            "type": "string",
-            "title": "Learner Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "learner_id"
-        ],
-        "title": "StartRequest"
-      },
-      "StartResponse": {
-        "properties": {
-          "message": {
-            "type": "string",
-            "title": "Message"
-          },
-          "plan": {
-            "$ref": "#/components/schemas/PlanProgress"
-          },
-          "current_stage": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/StageInfo"
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learner Id"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/TeacherSessionEventType"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "context": {
+            "$ref": "#/components/schemas/TeacherSessionContext"
+          },
+          "learner_signal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LearnerSignalPayload"
               },
               {
                 "type": "null"
               }
             ]
           },
-          "plan_completed": {
+          "proposal_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeacherProposalType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force_move": {
             "type": "boolean",
-            "title": "Plan Completed"
+            "title": "Force Move",
+            "default": false
           }
         },
         "type": "object",
         "required": [
-          "message",
-          "plan",
-          "current_stage",
-          "plan_completed"
+          "event_type"
         ],
-        "title": "StartResponse"
+        "title": "TeacherSessionRequest"
+      },
+      "TeacherSessionResult": {
+        "properties": {
+          "teacher_message": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Teacher Message"
+          },
+          "teacher_action": {
+            "$ref": "#/components/schemas/TeacherAction"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeacherProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checkpoint_evaluation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckpointEvaluation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "debt_updates": {
+            "items": {
+              "$ref": "#/components/schemas/LearningDebtItem"
+            },
+            "type": "array",
+            "title": "Debt Updates"
+          },
+          "section_understanding": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SectionUnderstandingArtifact"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_stage": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Stage"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
+          "plan_completed": {
+            "type": "boolean",
+            "title": "Plan Completed",
+            "default": false
+          },
+          "lesson": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LessonPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "interaction_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interaction Id"
+          },
+          "citations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "retrieval_debug": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieval Debug"
+          }
+        },
+        "type": "object",
+        "required": [
+          "teacher_message",
+          "teacher_action"
+        ],
+        "title": "TeacherSessionResult"
       },
       "ValidationError": {
         "properties": {

@@ -46,12 +46,19 @@ class RequestContextFilter(logging.Filter):
 
 
 class JsonFormatter(logging.Formatter):
+    def __init__(self, *, service_name: str, environment: str) -> None:
+        super().__init__()
+        self.service_name = service_name
+        self.environment = environment
+
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
             "timestamp": datetime.fromtimestamp(record.created, UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "event": getattr(record, "event_name", None) or "log",
+            "service": self.service_name,
+            "environment": self.environment,
         }
         message = record.getMessage()
         if message and message != payload["event"]:
@@ -73,11 +80,17 @@ class JsonFormatter(logging.Formatter):
 
 
 class PlainFormatter(logging.Formatter):
+    def __init__(self, *, service_name: str, environment: str) -> None:
+        super().__init__()
+        self.service_name = service_name
+        self.environment = environment
+
     def format(self, record: logging.LogRecord) -> str:
         base = (
             f"{datetime.fromtimestamp(record.created, UTC).isoformat()} | "
             f"{record.levelname} | {record.name} | "
-            f"{getattr(record, 'event_name', None) or record.getMessage()}"
+            f"{getattr(record, 'event_name', None) or record.getMessage()} | "
+            f"{self.service_name} | {self.environment}"
         )
 
         context = {
@@ -106,9 +119,9 @@ def configure_logging() -> None:
     handler = logging.StreamHandler()
     handler.addFilter(RequestContextFilter())
     if settings.log_format == "plain":
-        handler.setFormatter(PlainFormatter())
+        handler.setFormatter(PlainFormatter(service_name=settings.service_name, environment=settings.app_env))
     else:
-        handler.setFormatter(JsonFormatter())
+        handler.setFormatter(JsonFormatter(service_name=settings.service_name, environment=settings.app_env))
     root.addHandler(handler)
 
 

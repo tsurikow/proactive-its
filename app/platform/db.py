@@ -14,6 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from app.platform.config import get_settings
 
 
+def _resolve_project_root() -> Path:
+    for candidate in (Path.cwd(), *Path(__file__).resolve().parents):
+        if (candidate / "alembic.ini").exists() and (candidate / "alembic").is_dir():
+            return candidate
+    return Path.cwd()
+
+
 @lru_cache(maxsize=1)
 def get_engine() -> AsyncEngine:
     settings = get_settings()
@@ -54,7 +61,7 @@ async def close_db() -> None:
 
 
 def _run_migrations(database_url: str) -> None:
-    project_root = Path(__file__).resolve().parents[2]
+    project_root = _resolve_project_root()
     config = Config(str(project_root / "alembic.ini"))
     config.set_main_option("script_location", str(project_root / "alembic"))
     config.set_main_option("sqlalchemy.url", database_url)
@@ -64,3 +71,28 @@ def _run_migrations(database_url: str) -> None:
 async def run_migrations() -> None:
     settings = get_settings()
     await asyncio.to_thread(_run_migrations, settings.database_url)
+
+
+async def assert_no_stale_teacher_turn_columns() -> None:
+    engine = get_engine()
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'teacher_turns'
+                  AND column_name IN ('surface', 'mode')
+                ORDER BY column_name
+                """
+            )
+        )
+        stale_columns = [str(row[0]) for row in result.fetchall()]
+    if stale_columns:
+        joined = ", ".join(stale_columns)
+        raise RuntimeError(
+            "Detected stale teacher_turns columns in the local dev database: "
+            f"{joined}. Rebuild the disposable Postgres volume from the current baseline "
+            "before continuing."
+        )

@@ -1,0 +1,6 @@
+[core]
+    remote = production
+['remote "production"']
+    url = s3://proactive-its
+    endpointurl = https://storage.yandexcloud.net
+    region = ru-central1

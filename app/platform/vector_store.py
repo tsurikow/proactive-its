@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from qdrant_client import AsyncQdrantClient, QdrantClient
+from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models as qm
 from qdrant_client.http.exceptions import UnexpectedResponse
 
@@ -43,93 +43,6 @@ class _VectorStoreBase:
         return (10**9, chunk_id)
 
 
-class SyncVectorStore(_VectorStoreBase):
-    def __init__(self, settings: Settings | None = None):
-        super().__init__(settings)
-        if self.settings.qdrant_url == ":memory:":
-            self.client = QdrantClient(location=":memory:")
-        elif self.settings.qdrant_url.startswith("file://"):
-            self.client = QdrantClient(path=self.settings.qdrant_url.removeprefix("file://"))
-        else:
-            self.client = QdrantClient(url=self.settings.qdrant_url)
-
-    def ensure_collection(self, vector_size: int, collection_name: str) -> None:
-        exists = self.client.collection_exists(collection_name)
-        if exists:
-            return
-        logger.info("Creating Qdrant collection '%s' with vector size %s", collection_name, vector_size)
-        self.client.create_collection(
-            collection_name=collection_name,
-            vectors_config=qm.VectorParams(size=vector_size, distance=qm.Distance.COSINE),
-        )
-
-    def ensure_collections(self, vector_size: int) -> None:
-        self.ensure_collection(vector_size, self.chunks_collection)
-        self.ensure_collection(vector_size, self.sections_collection)
-
-    def recreate_collection(self, vector_size: int, collection_name: str) -> None:
-        if self.client.collection_exists(collection_name):
-            self.client.delete_collection(collection_name)
-        self.ensure_collection(vector_size, collection_name)
-
-    def recreate_collections(self, vector_size: int) -> None:
-        self.recreate_collection(vector_size, self.chunks_collection)
-        self.recreate_collection(vector_size, self.sections_collection)
-
-    def upsert(self, points: list[qm.PointStruct], collection_name: str | None = None) -> None:
-        if not points:
-            return
-        self.client.upsert(
-            collection_name=collection_name or self.chunks_collection,
-            points=points,
-            wait=True,
-        )
-
-    def count(self, collection_name: str | None = None) -> int:
-        res = self.client.count(collection_name=collection_name or self.chunks_collection, exact=True)
-        return int(res.count)
-
-    def search(
-        self,
-        query_vector: list[float],
-        top_k: int,
-        query_filter: qm.Filter | None = None,
-        collection_name: str | None = None,
-    ) -> list[dict[str, Any]]:
-        target = collection_name or self.chunks_collection
-        try:
-            if hasattr(self.client, "search"):
-                records = self.client.search(
-                    collection_name=target,
-                    query_vector=query_vector,
-                    query_filter=query_filter,
-                    limit=top_k,
-                    with_payload=True,
-                    with_vectors=False,
-                )
-            else:
-                response = self.client.query_points(
-                    collection_name=target,
-                    query=query_vector,
-                    query_filter=query_filter,
-                    limit=top_k,
-                    with_payload=True,
-                    with_vectors=False,
-                )
-                records = response.points
-        except UnexpectedResponse as exc:
-            if exc.status_code == 404:
-                logger.warning("Qdrant collection '%s' not found.", target)
-                return []
-            raise
-        out: list[dict[str, Any]] = []
-        for record in records:
-            payload = dict(record.payload or {})
-            payload["score"] = float(record.score)
-            out.append(payload)
-        return out
-
-
 class AsyncVectorStore(_VectorStoreBase):
     def __init__(self, settings: Settings | None = None):
         super().__init__(settings)
@@ -139,6 +52,62 @@ class AsyncVectorStore(_VectorStoreBase):
             self.client = AsyncQdrantClient(path=self.settings.qdrant_url.removeprefix("file://"))
         else:
             self.client = AsyncQdrantClient(url=self.settings.qdrant_url)
+
+    async def ensure_collection(
+        self,
+        vector_size: int | None,
+        collection_name: str,
+        *,
+        payload_only: bool = False,
+    ) -> None:
+        exists = await self.client.collection_exists(collection_name)
+        if exists:
+            return
+        if payload_only:
+            logger.info("Creating payload-only Qdrant collection '%s'", collection_name)
+            await self.client.create_collection(
+                collection_name=collection_name,
+                vectors_config={},
+            )
+            return
+        if vector_size is None:
+            raise RuntimeError(f"Vector size is required for collection '{collection_name}'.")
+        logger.info("Creating Qdrant collection '%s' with vector size %s", collection_name, vector_size)
+        await self.client.create_collection(
+            collection_name=collection_name,
+            vectors_config=qm.VectorParams(size=vector_size, distance=qm.Distance.COSINE),
+        )
+
+    async def recreate_collection(
+        self,
+        vector_size: int | None,
+        collection_name: str,
+        *,
+        payload_only: bool = False,
+    ) -> None:
+        if await self.client.collection_exists(collection_name):
+            await self.client.delete_collection(collection_name)
+        await self.ensure_collection(vector_size, collection_name, payload_only=payload_only)
+
+    async def upsert(self, points: list[qm.PointStruct], collection_name: str | None = None) -> None:
+        if not points:
+            return
+        await self.client.upsert(
+            collection_name=collection_name or self.chunks_collection,
+            points=points,
+            wait=True,
+        )
+
+    async def count(self, collection_name: str | None = None) -> int:
+        target = collection_name or self.chunks_collection
+        try:
+            res = await self.client.count(collection_name=target, exact=True)
+        except UnexpectedResponse as exc:
+            if exc.status_code == 404:
+                logger.warning("Qdrant collection '%s' not found.", target)
+                return 0
+            raise
+        return int(res.count)
 
     async def query_points(
         self,
@@ -228,6 +197,3 @@ class AsyncVectorStore(_VectorStoreBase):
 
     async def close(self) -> None:
         await self.client.close()
-
-
-VectorStore = SyncVectorStore

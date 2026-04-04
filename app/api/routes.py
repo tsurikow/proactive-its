@@ -1,25 +1,28 @@
 from __future__ import annotations
 
-import logging
+from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.requests import Request as FastAPIRequest
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-
-from app.api.dependencies import get_chat_service, get_tutor_service
+from app.api.auth_routes import router as auth_router
+from app.api.dependencies import (
+    get_chat_service,
+    get_content_bootstrap_service,
+    get_teacher_runtime,
+    require_authenticated_learner,
+    get_teacher_state_service,
+    get_teacher_feedback_runtime,
+)
 from app.api.schemas import (
-    ChatRequest,
-    ChatResponse,
     FeedbackRequest,
     FeedbackResponse,
-    LessonCurrentResponse,
-    NextRequest,
-    NextResponse,
-    StartMessageResponse,
-    StartRequest,
-    StartResponse,
+)
+from app.teacher.models import (
+    TeacherSessionRequest,
+    TeacherSessionResult,
 )
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+router.include_router(auth_router)
 
 
 @router.get("/health")
@@ -27,86 +30,88 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.post("/start", response_model=StartResponse)
-async def start(
-    request: StartRequest,
-    tutor_service=Depends(get_tutor_service),
-) -> StartResponse:
+@router.get("/health/ready")
+async def health_ready(
+    response: Response,
+    teacher_state_service=Depends(get_teacher_state_service),
+    content_bootstrap_service=Depends(get_content_bootstrap_service),
+) -> dict[str, object]:
     try:
-        payload = await tutor_service.start_payload(request.learner_id)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to start session: {exc}") from exc
-    return StartResponse(**payload)
-
-
-@router.get("/start-message", response_model=StartMessageResponse)
-async def start_message(
-    learner_id: str = Query(..., min_length=1),
-    tutor_service=Depends(get_tutor_service),
-) -> StartMessageResponse:
+        template_status = await teacher_state_service.template_ready_status()
+        database_ready = True
+    except Exception:
+        template_status = {
+            "template_ready": False,
+            "template_id": None,
+            "template_version": None,
+        }
+        database_ready = False
     try:
-        payload = await tutor_service.start_message_payload(learner_id)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to get start message: {exc}") from exc
-    return StartMessageResponse(**payload)
+        content_status = await content_bootstrap_service.current_status()
+        content_ready = content_status.content_ready
+        sections_count = content_status.sections_count
+        chunks_count = content_status.chunks_count
+    except Exception:
+        content_ready = False
+        sections_count = 0
+        chunks_count = 0
+    ready = bool(database_ready and template_status["template_ready"] and content_ready)
+    response.status_code = 200 if ready else 503
+    return {
+        "status": "ready" if ready else "not_ready",
+        "database_ready": database_ready,
+        "template_ready": bool(template_status["template_ready"]),
+        "template_id": template_status["template_id"],
+        "template_version": template_status["template_version"],
+        "content_ready": content_ready,
+        "sections_count": sections_count,
+        "chunks_count": chunks_count,
+    }
 
 
-@router.get("/lesson/current", response_model=LessonCurrentResponse)
-async def lesson_current(
-    learner_id: str = Query(..., min_length=1),
-    tutor_service=Depends(get_tutor_service),
-) -> LessonCurrentResponse:
-    try:
-        payload = await tutor_service.current_lesson_payload(learner_id)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to get current lesson: {exc}") from exc
-    return LessonCurrentResponse(**payload)
-
-
-@router.post("/next", response_model=NextResponse)
-async def next_item(
-    request: NextRequest,
-    tutor_service=Depends(get_tutor_service),
-) -> NextResponse:
-    try:
-        payload = await tutor_service.next_payload(request.learner_id, force=request.force)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to advance session: {exc}") from exc
-    return NextResponse(**payload)
-
-
-@router.post("/chat", response_model=ChatResponse)
-async def chat(
-    request: ChatRequest,
+@router.post("/teacher/session", response_model=TeacherSessionResult)
+async def teacher_session(
+    request: TeacherSessionRequest,
+    raw_request: FastAPIRequest,
+    learner=Depends(require_authenticated_learner),
     chat_service=Depends(get_chat_service),
-) -> ChatResponse:
+    teacher_runtime=Depends(get_teacher_runtime),
+) -> TeacherSessionResult:
     try:
-        payload = await chat_service.chat(request)
+        if request.learner_id and request.learner_id != learner.id:
+            raise HTTPException(status_code=403, detail="learner_mismatch")
+        return await teacher_runtime.execute_session(
+            request.model_copy(update={"learner_id": learner.id}),
+            chat_service=chat_service,
+            request_id=getattr(raw_request.state, "request_id", None),
+            client_request_id=raw_request.headers.get("x-request-id"),
+        )
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return ChatResponse(**payload)
+        detail = str(exc)
+        if detail == "message_required":
+            raise HTTPException(status_code=422, detail="message is required for this session event") from exc
+        if detail == "llm_unavailable":
+            raise HTTPException(status_code=503, detail="llm_unavailable") from exc
+        if detail == "content_not_ready":
+            raise HTTPException(status_code=503, detail="content_not_ready") from exc
+        raise HTTPException(status_code=503, detail=detail) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to execute teacher session: {exc}") from exc
 
 
-@router.post("/feedback", response_model=FeedbackResponse)
-async def post_feedback(
+@router.post("/teacher/feedback", response_model=FeedbackResponse)
+async def teacher_feedback(
     request: FeedbackRequest,
+    learner=Depends(require_authenticated_learner),
     chat_service=Depends(get_chat_service),
-    tutor_service=Depends(get_tutor_service),
+    teacher_feedback_runtime=Depends(get_teacher_feedback_runtime),
 ) -> FeedbackResponse:
-    await tutor_service.ensure_learner(request.learner_id)
-    feedback_context = await chat_service.get_feedback_context(request.learner_id, request.interaction_id)
-    if feedback_context is None:
+    if request.learner_id and request.learner_id != learner.id:
+        raise HTTPException(status_code=403, detail="learner_mismatch")
+    await teacher_feedback_runtime.state_service.ensure_learner(learner.id)
+    interaction = await chat_service.get_feedback_context(learner.id, request.interaction_id)
+    if interaction is None:
         raise HTTPException(status_code=404, detail="interaction not found")
-    interaction = feedback_context["interaction"]
-    assessment = feedback_context["assessment"]
 
     await chat_service.record_feedback_confidence(request.interaction_id, request.confidence)
 
@@ -114,13 +119,12 @@ async def post_feedback(
     module_id = interaction.get("module_id")
 
     try:
-        payload = await tutor_service.apply_feedback(
-            request.learner_id,
+        payload = await teacher_feedback_runtime.apply_feedback(
+            learner.id,
             request.interaction_id,
             section_id,
             module_id,
             request.confidence,
-            assessment,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

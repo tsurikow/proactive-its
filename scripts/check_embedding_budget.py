@@ -3,9 +3,9 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 
-from app.content.chunker import split_markdown_into_chunks
-from app.content.io import clean_markdown, iter_documents
-from app.content.token_count import build_token_counter
+from app.content.parsing.chunker import split_markdown_into_chunks
+from app.content.parsing.io import clean_markdown, iter_documents
+from app.content.indexing.token_count import build_token_counter
 from app.platform.config import get_settings
 
 
