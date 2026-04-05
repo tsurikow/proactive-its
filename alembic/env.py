@@ -6,7 +6,10 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from app.state.models import Base
+import app.platform.chat.models  # noqa: F401
+import app.state.orm_models  # noqa: F401
+import app.teacher.orm_models  # noqa: F401
+from app.platform.orm_base import Base
 
 config = context.config
 

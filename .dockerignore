@@ -1,0 +1,17 @@
+.git
+.gitignore
+.venv
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.uv-cache/
+.local/
+data/
+.dvc/cache/
+.dvc/tmp/
+frontend/
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.pnpm-store/

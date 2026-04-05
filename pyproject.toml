@@ -1,29 +1,38 @@
 [project]
 name = "proactive-its"
 version = "0.1.0"
-description = "Baseline tutoring system with deterministic study flow and RAG"
+description = "Advanced tutoring system with agentic study flow and RAG"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-  "fastapi>=0.135.1",
-  "uvicorn[standard]>=0.40.0",
+  "fastapi>=0.135.2",
+  "uvicorn[standard]>=0.42.0",
   "pydantic>=2.12.5",
-  "pydantic-settings>=2.12.0",
+  "pydantic-settings>=2.13.1",
+  "pwdlib[argon2]>=0.3.0",
+  "email-validator>=2.3.0",
+  "itsdangerous>=2.2.0",
+  "logfire[fastapi]>=4.14.2",
   "alembic>=1.18.4",
-  "sqlalchemy>=2.0.46",
+  "sqlalchemy>=2.0.48",
+  "greenlet>=3.3.2",
   "asyncpg>=0.31.0",
-  "qdrant-client>=1.16.2",
-  "openai>=2.21.0",
-  "langchain-core>=1.2.13",
-  "langchain-openai>=1.1.9",
+  "celery>=5.6.3",
+  "qdrant-client>=1.17.1",
+  "openai>=2.30.0",
   "markdown-it-py>=4.0.0",
-  "python-dotenv>=1.2.1",
+  "python-dotenv>=1.2.2",
   "tiktoken>=0.12.0",
+  "pydantic-ai>=1.77.0",
+  "redis[hiredis]>=5.0.0",
+  "msgpack>=1.1.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "ruff>=0.6.0",
+  "dvc>=3.64.2",
+  "dvc-s3>=3.2.2",
+  "ruff>=0.15.8",
 ]
 
 [tool.ruff]

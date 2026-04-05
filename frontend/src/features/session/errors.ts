@@ -8,6 +8,16 @@ export interface NormalizedApiError {
 
 export function normalizeApiError(error: unknown): NormalizedApiError {
   if (error instanceof ApiError) {
+    if (error.message === "content_not_ready") {
+      return {
+        message: "Course content is not indexed yet. Run the content indexer before starting the manual alpha.",
+        timeout: false,
+        cancelled: false,
+      };
+    }
+    if (error.message === "chat_service_required") {
+      return { message: "Chat runtime is not available.", timeout: false, cancelled: false };
+    }
     if (error.code === "ABORT") {
       return { message: "Generation stopped.", timeout: false, cancelled: true };
     }

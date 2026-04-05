@@ -1,0 +1,39 @@
+services:
+  bootstrap:
+    environment:
+      EMBEDDING_BASE_URL: ${EMBEDDING_DOCKER_BASE_URL:-http://host.docker.internal:11434/v1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  indexer:
+    environment:
+      EMBEDDING_BASE_URL: ${EMBEDDING_DOCKER_BASE_URL:-http://host.docker.internal:11434/v1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  api:
+    environment:
+      EMBEDDING_BASE_URL: ${EMBEDDING_DOCKER_BASE_URL:-http://host.docker.internal:11434/v1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${APP_PORT:-8000}:${APP_PORT:-8000}"
+
+  worker:
+    environment:
+      EMBEDDING_BASE_URL: ${EMBEDDING_DOCKER_BASE_URL:-http://host.docker.internal:11434/v1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  postgres:
+    ports:
+      - "${POSTGRES_PUBLISH_PORT:-5432}:${POSTGRES_INTERNAL_PORT:-5432}"
+
+  qdrant:
+    ports:
+      - "${QDRANT_PUBLISH_PORT:-6333}:${QDRANT_INTERNAL_PORT:-6333}"
+
+  rabbitmq:
+    ports:
+      - "${RABBITMQ_PUBLISH_PORT:-5672}:${RABBITMQ_INTERNAL_PORT:-5672}"
+      - "${RABBITMQ_MANAGEMENT_PUBLISH_PORT:-15672}:${RABBITMQ_MANAGEMENT_PORT:-15672}"
