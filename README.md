@@ -25,20 +25,25 @@ An LLM-first intelligent tutoring system. A teacher AI drives the session loop �
 Browser (React + Vite)
      │  HTTP / cookie auth
      ▼
-FastAPI  ──►  Teacher Runtime  ──►  TeacherEngine (SGR calls)
-     │              │                      │
-     │         State services         OpenRouter API
-     │         (Postgres)             (PydanticAI)
+FastAPI  ──►  Teacher Runtime (durable wrapper)
+     │              │
+     │         create turn bundle (Postgres)
+     │         enqueue → RabbitMQ
+     │         wait   → Redis pub/sub or DB poll
      │
-     ├──►  Chat Service (durable path)
-     │         │
-     │    RabbitMQ ──► Celery Worker ──► Teacher Runtime
-     │         │
-     │       Redis  (pub/sub turn notification)
+     │    RabbitMQ ──► Celery Worker
+     │                     │
+     │               Teacher Runtime (inner)
+     │                     │
+     │                ┌────┼─────────────────┐
+     │                │    │                  │
+     │           TeacherEngine          Chat Service
+     │           (SGR calls)          (RAG pipeline)
+     │                │                  │
+     │           OpenRouter API       Qdrant
+     │           (PydanticAI)      (vector search)
      │
-     └──►  RAG pipeline
-               │
-            Qdrant (vector search)
+     └──►  State services (Postgres)
 ```
 
 The teacher owns the session. The learner sends events — message, answer, navigation signal — and the teacher responds with a pedagogical action: explain, ask, assign, propose a move. All decisions pass through typed SGR schemas; there are no free-form agent tool calls.
@@ -168,34 +173,52 @@ All evidence uses `CheckpointEvaluationStatus` values: `correct`, `partial`, `in
 
 ## Async infrastructure: Celery · RabbitMQ · Redis
 
-The teacher runtime is compute-heavy (3–5 LLM calls per turn, up to 300 s total). Running that synchronously in a FastAPI request would block the web server.
+The teacher runtime is compute-heavy (3–5 LLM calls per turn, up to 300 s total). All LLM work runs in a Celery worker process; the FastAPI process only creates a durable turn record, enqueues the task, and waits for the result.
 
 ```
 POST /v1/teacher/session
   │
-  ├── [fast path, durable_chat_enabled=false]
-  │     Run LLM calls inline in the request (simple, no queue)
+  ├── [inline path, durable_chat_enabled=false]
+  │     Run execute_session_inner() in the API process (simple, no queue)
   │
-  └── [durable path, durable_chat_enabled=true]
-        1. Write a pending TurnRecord to Postgres
-        2. Enqueue task_id → RabbitMQ
-        3. Return 202 with task_id
-        4. Client subscribes to SSE: GET /v1/teacher/session/stream/{task_id}
-        5. API waits on Redis pub/sub channel `chat_turn:{turn_id}`
-        6. Celery worker picks up the task, runs teacher runtime
-        7. Worker publishes "done" to the Redis channel
-        8. API unblocks, reads the completed TurnRecord, returns it
+  └── [durable path, durable_chat_enabled=true]  (default)
+        1. Derive request_key (idempotency via SHA-256 hash)
+        2. Write ChatTurn + TeacherJob + OutboxEvent to Postgres (single tx)
+        3. Publish task to RabbitMQ via Celery send_task()
+        4. Wait — Redis pub/sub on `chat_turn:{turn_id}`, fallback to DB polling
+        5. Celery worker claims the turn, runs execute_session_inner()
+           (all intent paths: TASK_ANSWER, NAVIGATION, GROUNDED_REPLY, default)
+        6. Worker saves result to ChatTurn.final_result_json
+        7. Worker publishes "done" to Redis channel
+        8. API unblocks, deserialises TeacherSessionResult, returns JSON to client
 ```
 
-**RabbitMQ** — durable task broker. Tasks survive worker restarts. The `chat_generation` queue routes to the teacher worker pool.
+Every intent path goes through the worker — not just RAG. Inside the worker, the grounded-reply path calls the RAG pipeline directly (no nested queue dispatch).
+
+**Degraded execution:** If RabbitMQ is unreachable, the API falls back to running `execute_session_inner()` inline and marks the turn as `degraded_execution=true`.
+
+**Idempotency:** Duplicate requests with the same `x-request-id` header hit the same `request_key` and return the cached result without re-execution.
+
+### Components
+
+**RabbitMQ** — durable task broker. Tasks survive worker restarts. The `chat_generation` queue routes to the Celery worker pool.
 
 **Celery** — worker framework. Two registered tasks:
-- `run_chat_generation` — executes a full teacher session turn (max 3 retries with exponential backoff)
-- `run_memory_synthesis` — synthesises learner memory asynchronously (max 2 retries)
+- `run_teacher_session` — executes a full teacher session turn (max 3 retries with exponential backoff and jitter)
+- `run_memory_synthesis` — synthesises learner memory asynchronously (max 2 retries, fire-and-forget)
 
 **Redis** — two roles:
-1. Pub/sub notification channel so the API process knows exactly when a turn completes, without polling Postgres.
+1. Pub/sub notification channel (`chat_turn:{turn_id}`) so the API process knows exactly when a turn completes, without polling Postgres.
 2. Embedding cache (`redis_cache_ttl_seconds`, default 24 h) — avoids re-computing embeddings for repeated queries.
+
+### Postgres outbox pattern
+
+Task delivery is guaranteed by the transactional outbox:
+1. `ChatTurn`, `TeacherJob`, and `OutboxEvent` are written in a single Postgres transaction.
+2. After commit, the `OutboxEvent` is published to RabbitMQ and marked `published_at`.
+3. If the broker is unreachable, the event stays unpublished and the API degrades to inline execution.
+
+This avoids the dual-write problem (writing to DB and publishing to a broker in separate steps).
 
 ---
 
@@ -412,7 +435,7 @@ docker compose run --rm indexer --force
 | `bootstrap` | Runs migrations and seeds default template (one-shot) |
 | `indexer` | Indexes content into Qdrant (profile `ops`, run manually) |
 | `api` | FastAPI application |
-| `worker` | Celery worker (`chat_generation` queue) |
+| `worker` | Celery worker — executes teacher session turns and memory synthesis (`chat_generation` queue) |
 | `web` | Nginx serving built frontend + reverse proxy to API |
 
 ### First deploy

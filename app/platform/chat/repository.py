@@ -57,6 +57,8 @@ class DurableChatRepository:
         module_id: str | None,
         section_id: str | None,
         request_payload_json: dict[str, Any],
+        job_kind: str = "chat_generation",
+        event_kind: str = "chat_generation",
     ) -> dict[str, Any]:
         async with get_session() as session:
             existing_turn = await session.scalar(
@@ -71,7 +73,7 @@ class DurableChatRepository:
                     .where(
                         OutboxEvent.aggregate_type == "chat_turn",
                         OutboxEvent.aggregate_id == existing_turn.id,
-                        OutboxEvent.event_kind == "chat_generation",
+                        OutboxEvent.event_kind == event_kind,
                     )
                     .order_by(OutboxEvent.created_at.desc())
                     .limit(1)
@@ -98,7 +100,7 @@ class DurableChatRepository:
             job = TeacherJob(
                 id=uuid4().hex,
                 turn_id=turn.id,
-                job_kind="chat_generation",
+                job_kind=job_kind,
                 idempotency_key=request_key,
             )
             session.add(job)
@@ -107,7 +109,7 @@ class DurableChatRepository:
             outbox_event = OutboxEvent(
                 aggregate_type="chat_turn",
                 aggregate_id=turn.id,
-                event_kind="chat_generation",
+                event_kind=event_kind,
                 payload_json={
                     "turn_id": turn.id,
                     "job_id": job.id,
@@ -258,7 +260,7 @@ class DurableChatRepository:
         self,
         *,
         turn_id: str,
-        final_interaction_id: int,
+        final_interaction_id: int | None,
         final_result_json: dict[str, Any],
         worker_metadata_json: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:

@@ -127,11 +127,9 @@ def get_grounded_answer_runtime() -> GroundedAnswerRuntime:
 def get_chat_service() -> ChatService:
     settings = get_settings()
     return ChatService(
-        chat_repository=get_durable_chat_repository(),
         interaction_repository=get_chat_repository(),
         learner_state_repository=get_learner_state_repository(),
         grounded_answer_runtime=get_grounded_answer_runtime(),
-        redis_cache=get_redis_cache(),
         settings=settings,
     )
 

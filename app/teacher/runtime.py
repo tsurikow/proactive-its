@@ -18,7 +18,10 @@ State management reuses existing infrastructure.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
+import time
 from typing import Any
 
 from app.api.schemas import LessonPayload
@@ -262,7 +265,7 @@ class TeacherRuntime:
         )
 
     # ------------------------------------------------------------------
-    # Main entry point
+    # Main entry point (API-side durable wrapper)
     # ------------------------------------------------------------------
 
     async def execute_session(
@@ -273,7 +276,7 @@ class TeacherRuntime:
         request_id: str | None = None,
         client_request_id: str | None = None,
     ) -> TeacherSessionResult:
-        """Execute one teacher session turn."""
+        """API-side entry: validate, dispatch to Celery worker, wait for result."""
         if (
             request.event_type == TeacherSessionEventType.LEARNER_REPLY
             and not request.message
@@ -283,6 +286,78 @@ class TeacherRuntime:
 
         if not self.engine.is_available():
             raise RuntimeError("llm_unavailable")
+
+        if not self.settings.durable_chat_enabled:
+            return await self.execute_session_inner(request, chat_service=chat_service)
+
+        from app.api.dependencies import get_durable_chat_repository, get_redis_cache
+
+        repo = get_durable_chat_repository()
+        request_key = self._derive_session_request_key(request, client_request_id=client_request_id)
+
+        bundle = await repo.create_chat_turn_bundle(
+            request_key=request_key,
+            learner_id=request.learner_id,
+            session_id=None,
+            module_id=request.context.current_module_id,
+            section_id=request.context.current_section_id,
+            request_payload_json=request.model_dump(mode="json"),
+            job_kind="teacher_session",
+            event_kind="teacher_session",
+        )
+
+        turn = bundle["turn"]
+
+        # Idempotency: already completed
+        if turn.get("state") == "completed" and turn.get("final_result_json"):
+            return TeacherSessionResult.model_validate(turn["final_result_json"])
+
+        # Failed previously: degrade to inline
+        if turn.get("state") == "failed":
+            await repo.mark_chat_turn_degraded(turn["id"], fallback_reason="retry_after_failure")
+            result = await self.execute_session_inner(request, chat_service=chat_service)
+            result_json = result.model_dump(mode="json")
+            await repo.complete_chat_turn(
+                turn_id=turn["id"],
+                final_interaction_id=None,
+                final_result_json=result_json,
+                worker_metadata_json={"degraded_execution": True},
+            )
+            return result
+
+        # Publish to Celery
+        if bundle["created"] or turn.get("state") == "accepted":
+            published, reason = await self._publish_session_turn(bundle, repo)
+            if not published:
+                await repo.mark_chat_turn_degraded(turn["id"], fallback_reason=reason)
+                result = await self.execute_session_inner(request, chat_service=chat_service)
+                result_json = result.model_dump(mode="json")
+                await repo.complete_chat_turn(
+                    turn_id=turn["id"],
+                    final_interaction_id=None,
+                    final_result_json=result_json,
+                    worker_metadata_json={"degraded_execution": True, "fallback_reason": reason},
+                )
+                return result
+
+        # Wait for worker completion
+        result_json = await self._wait_for_session_completion(turn["id"], repo, get_redis_cache())
+        if result_json is not None:
+            return TeacherSessionResult.model_validate(result_json)
+
+        raise RuntimeError("Teacher session is still in progress. Retry the same request.")
+
+    # ------------------------------------------------------------------
+    # Inner execution (runs in Celery worker or inline as fallback)
+    # ------------------------------------------------------------------
+
+    async def execute_session_inner(
+        self,
+        request: TeacherSessionRequest,
+        *,
+        chat_service: Any | None = None,
+    ) -> TeacherSessionResult:
+        """Execute one teacher session turn (all LLM work happens here)."""
 
         # 1. Load state context
         template, state, targets, current_stage_raw, adaptation_context = (
@@ -323,8 +398,6 @@ class TeacherRuntime:
             result = await self._handle_learner_reply(
                 request=request,
                 chat_service=chat_service,
-                request_id=request_id,
-                client_request_id=client_request_id,
                 template=template,
                 state=state,
                 targets=targets,
@@ -391,6 +464,115 @@ class TeacherRuntime:
         return result
 
     # ------------------------------------------------------------------
+    # Durable dispatch helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _derive_session_request_key(
+        request: TeacherSessionRequest,
+        *,
+        client_request_id: str | None,
+    ) -> str:
+        payload = {
+            "learner_id": request.learner_id,
+            "event_type": request.event_type.value,
+            "message": request.message,
+            "module_id": request.context.current_module_id,
+            "section_id": request.context.current_section_id,
+            "client_request_id": client_request_id,
+        }
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+    @staticmethod
+    async def _publish_session_turn(
+        bundle: dict[str, Any],
+        repo: Any,
+    ) -> tuple[bool, str]:
+        turn = bundle["turn"]
+        pending_events = await repo.list_pending_outbox_events(
+            aggregate_type="chat_turn",
+            aggregate_id=str(turn["id"]),
+            event_kind="teacher_session",
+        )
+        if not pending_events:
+            return True, "already_published"
+
+        job = bundle.get("job") or await repo.get_teacher_job_for_turn(str(turn["id"]))
+        if job is None:
+            return False, "missing_job"
+
+        for event in pending_events:
+            try:
+                from app.platform.chat.tasks import enqueue_teacher_session_task
+
+                broker_message_id = await asyncio.to_thread(
+                    enqueue_teacher_session_task,
+                    turn_id=str(turn["id"]),
+                    job_id=str(job["id"]),
+                )
+            except Exception as exc:
+                reason = f"broker_publish_failed:{exc}"
+                await repo.mark_outbox_event_failed(int(event["id"]), reason)
+                return False, reason
+            await repo.mark_outbox_event_published(int(event["id"]), broker_message_id)
+            await repo.mark_chat_turn_queued(str(turn["id"]), broker_message_id=broker_message_id)
+        return True, "published"
+
+    @staticmethod
+    async def _wait_for_session_completion(
+        turn_id: str,
+        repo: Any,
+        redis_cache: Any,
+    ) -> dict[str, Any] | None:
+        from app.platform.config import get_settings
+
+        settings = get_settings()
+
+        # Initial DB check — covers race where worker finishes before we subscribe
+        turn = await repo.get_chat_turn(turn_id)
+        if turn is not None and turn.get("state") == "completed" and turn.get("final_result_json") is not None:
+            return dict(turn["final_result_json"])
+        if turn is not None and turn.get("state") == "failed":
+            raise RuntimeError(str(turn.get("error_message") or "Teacher session failed."))
+
+        deadline = time.monotonic() + max(0.0, float(settings.chat_turn_inline_wait_seconds))
+
+        # Try Redis pub/sub first
+        if redis_cache is not None and redis_cache.available:
+            channel = f"chat_turn:{turn_id}"
+            pubsub = await redis_cache.subscribe(channel)
+            if pubsub is not None:
+                try:
+                    while time.monotonic() <= deadline:
+                        remaining = max(0.1, deadline - time.monotonic())
+                        msg = await asyncio.wait_for(
+                            pubsub.get_message(ignore_subscribe_messages=True, timeout=remaining),
+                            timeout=remaining + 1.0,
+                        )
+                        if msg is not None and msg.get("type") == "message":
+                            turn = await repo.get_chat_turn(turn_id)
+                            if turn is not None and turn.get("state") == "completed" and turn.get("final_result_json") is not None:
+                                return dict(turn["final_result_json"])
+                            if turn is not None and turn.get("state") == "failed":
+                                raise RuntimeError(str(turn.get("error_message") or "Teacher session failed."))
+                except asyncio.TimeoutError:
+                    pass
+                finally:
+                    await pubsub.unsubscribe(channel)
+                    await pubsub.aclose()
+
+        # Fallback: DB polling
+        poll_interval = max(0.5, float(settings.chat_turn_poll_interval_seconds))
+        while time.monotonic() <= deadline:
+            await asyncio.sleep(poll_interval)
+            turn = await repo.get_chat_turn(turn_id)
+            if turn is not None and turn.get("state") == "completed" and turn.get("final_result_json") is not None:
+                return dict(turn["final_result_json"])
+            if turn is not None and turn.get("state") == "failed":
+                raise RuntimeError(str(turn.get("error_message") or "Teacher session failed."))
+        return None
+
+    # ------------------------------------------------------------------
     # Handle learner reply
     # ------------------------------------------------------------------
 
@@ -399,8 +581,6 @@ class TeacherRuntime:
         *,
         request: TeacherSessionRequest,
         chat_service: Any | None,
-        request_id: str | None,
-        client_request_id: str | None,
         template: dict[str, Any],
         state: dict[str, Any],
         targets: list[dict[str, Any]],
@@ -450,8 +630,6 @@ class TeacherRuntime:
                 return await self._handle_grounded_reply(
                     request=request,
                     chat_service=chat_service,
-                    request_id=request_id,
-                    client_request_id=client_request_id,
                     template=template,
                     state=state,
                     targets=targets,
@@ -693,8 +871,6 @@ class TeacherRuntime:
         *,
         request: TeacherSessionRequest,
         chat_service: Any,
-        request_id: str | None,
-        client_request_id: str | None,
         template: dict[str, Any],
         state: dict[str, Any],
         targets: list[dict[str, Any]],
@@ -706,7 +882,7 @@ class TeacherRuntime:
         template_id = str(template["id"])
         current_stage = public_stage(current_stage_raw)
 
-        payload = await chat_service.chat(
+        payload = await chat_service.execute_chat_request(
             ChatTurnRequest(
                 learner_id=request.learner_id,
                 message=request.message or "",
@@ -715,8 +891,6 @@ class TeacherRuntime:
                     current_section_id=request.context.current_section_id,
                 ),
             ),
-            request_id=request_id,
-            client_request_id=client_request_id,
         )
 
         teacher_message = str(payload.get("answer_md") or "")
