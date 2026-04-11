@@ -34,12 +34,12 @@ def get_celery_app():
     return app
 
 
-def enqueue_chat_generation_task(*, turn_id: str, job_id: str) -> str:
+def enqueue_teacher_session_task(*, turn_id: str, job_id: str) -> str:
     celery_app = get_celery_app()
     if celery_app is None:
         raise RuntimeError("celery_unavailable")
     result = celery_app.send_task(
-        "app.platform.chat.tasks.run_chat_generation",
+        "app.platform.chat.tasks.run_teacher_session",
         args=[turn_id],
         task_id=job_id,
         queue=get_settings().chat_worker_queue,
@@ -83,10 +83,40 @@ async def _notify_turn_complete(turn_id: str) -> None:
         logger.debug("redis.notify_failed", extra={"turn_id": turn_id})
 
 
-async def _run_chat_generation_async(turn_id: str) -> None:
-    from app.api.dependencies import get_chat_service
+async def _run_teacher_session_async(turn_id: str) -> None:
+    from app.api.dependencies import get_teacher_runtime, get_chat_service, get_durable_chat_repository
 
-    await get_chat_service().execute_durable_chat_turn(turn_id)
+    repo = get_durable_chat_repository()
+    claim = await repo.claim_chat_turn_execution(turn_id)
+    status = str(claim.get("status") or "")
+    if status in ("completed", "busy", "missing"):
+        return
+
+    turn = claim.get("turn") or {}
+    request_payload = turn.get("request_payload_json") or {}
+
+    from app.teacher.models import TeacherSessionRequest
+    request = TeacherSessionRequest.model_validate(request_payload)
+
+    runtime = get_teacher_runtime()
+    chat_service = get_chat_service()
+
+    try:
+        result = await runtime.execute_session_inner(
+            request,
+            chat_service=chat_service,
+        )
+        result_json = result.model_dump(mode="json")
+    except Exception as exc:
+        await repo.mark_chat_turn_failed(turn_id, error_message=str(exc))
+        raise
+
+    await repo.complete_chat_turn(
+        turn_id=turn_id,
+        final_interaction_id=None,
+        final_result_json=result_json,
+        worker_metadata_json={"job_kind": "teacher_session"},
+    )
     await _notify_turn_complete(turn_id)
 
 
@@ -116,16 +146,16 @@ celery_app = get_celery_app()
 if celery_app is not None:
 
     @celery_app.task(  # type: ignore[misc]
-        name="app.platform.chat.tasks.run_chat_generation",
+        name="app.platform.chat.tasks.run_teacher_session",
         bind=True,
         autoretry_for=(Exception,),
         retry_backoff=True,
         retry_jitter=True,
         retry_kwargs={"max_retries": 3},
     )
-    def run_chat_generation(self, turn_id: str) -> None:
+    def run_teacher_session(self, turn_id: str) -> None:
         _ = self
-        run_async(_run_chat_generation_async(turn_id))
+        run_async(_run_teacher_session_async(turn_id))
 
     @celery_app.task(  # type: ignore[misc]
         name="app.platform.chat.tasks.run_memory_synthesis",
