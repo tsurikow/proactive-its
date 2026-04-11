@@ -29,6 +29,7 @@ def get_celery_app():
         result_serializer="json",
         accept_content=["json"],
         task_track_started=True,
+        worker_prefetch_multiplier=1,
     )
     return app
 

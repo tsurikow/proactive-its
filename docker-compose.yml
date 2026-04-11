@@ -65,6 +65,8 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-proactive}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-change-me-rabbitmq-password}
+    volumes:
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     expose:
       - "${RABBITMQ_INTERNAL_PORT:-5672}"
       - "${RABBITMQ_MANAGEMENT_PORT:-15672}"

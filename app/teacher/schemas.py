@@ -72,7 +72,11 @@ class IntentAndRoute(SGRSchema):
     intent_evidence: str = Field(
         description=(
             "What specific evidence in the message points to the intent type "
-            "you will choose? Cite key phrases or structural clues."
+            "you will choose? Cite key phrases or structural clues. "
+            "If the conversation history shows the teacher just asked a question "
+            "and the student's message looks like an answer (a number, formula, "
+            "or short factual response), classify as task_answer even without "
+            "a formal pending task."
         ),
     )
 
@@ -81,7 +85,8 @@ class IntentAndRoute(SGRSchema):
     intent_type: LearnerTurnIntentType = Field(
         description=(
             "The learner's primary intent. "
-            "task_answer: answering the current pending task. "
+            "task_answer: answering the current pending task OR answering a "
+            "comprehension question the teacher just asked in conversation. "
             "content_question: asking a subject-matter question. "
             "navigation: requesting to move (advance, revisit, repeat, accept/refuse proposal). "
             "understanding_signal: expressing confusion or partial understanding. "
@@ -173,7 +178,8 @@ class TeacherTurn(SGRSchema):
     situation_read: str = Field(
         description=(
             "What just happened? Summarize the trigger: session open, learner reply, "
-            "accepted proposal, post-evaluation, etc. What section are we in?"
+            "accepted proposal, post-evaluation, etc. What section are we in? "
+            "Also note your own last message in the conversation — you must NOT repeat it."
         ),
     )
     learner_state_read: str = Field(
@@ -193,7 +199,9 @@ class TeacherTurn(SGRSchema):
         description=(
             "Why is the chosen action the best pedagogical move right now? "
             "Consider: has the learner understood the core idea? Should we "
-            "dwell longer, move on, assign a task, or revisit earlier material?"
+            "dwell longer, move on, assign a task, or revisit earlier material? "
+            "If the student just confirmed understanding, your default should be "
+            "to advance, not to dwell. Only stay if the student explicitly expressed confusion."
         ),
     )
 

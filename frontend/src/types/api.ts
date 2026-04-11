@@ -17,9 +17,7 @@ export interface PlanProgress {
 }
 export type LessonPayload = components["schemas"]["LessonPayload"];
 export type TeacherAction = components["schemas"]["TeacherAction"];
-export type TeacherProposal = components["schemas"]["TeacherProposal"];
 export type CheckpointEvaluation = components["schemas"]["CheckpointEvaluation"];
-export type LearningDebtItem = components["schemas"]["LearningDebtItem"];
 
 export type TeacherSessionRequest = Omit<components["schemas"]["TeacherSessionRequest"], "learner_id"> & {
   learner_id?: string | null;

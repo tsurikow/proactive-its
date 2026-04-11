@@ -9,6 +9,7 @@ An LLM-first intelligent tutoring system. A teacher AI drives the session loop �
 - [Architecture overview](#architecture-overview)
 - [SGR — Schema-Guided Reasoning](#sgr--schema-guided-reasoning)
 - [Learner memory](#learner-memory)
+- [Mastery tracking](#mastery-tracking)
 - [Async infrastructure: Celery · RabbitMQ · Redis](#async-infrastructure-celery--rabbitmq--redis)
 - [Stack & libraries](#stack--libraries)
 - [Quick start](#quick-start)
@@ -105,7 +106,63 @@ Memory is a persistent JSON blob per learner × curriculum template, synthesised
 
 **Read path:** Memory is loaded at session start and injected into every SGR prompt as context, so the teacher always knows who it is talking to.
 
-In addition to the narrative memory, the system maintains per-section mastery snapshots (`mastery_score`, `status`, `evidence_count`) updated after every answer evaluation.
+In addition to the narrative memory, the system maintains per-section mastery snapshots — see [Mastery tracking](#mastery-tracking) below.
+
+---
+
+## Mastery tracking
+
+Every checkpoint or exercise answer flows through the `AnswerEvaluation` SGR schema and immediately updates the learner's mastery score. There is no separate feedback endpoint — all assessment data comes from the teacher's in-session evaluation.
+
+### Data flow
+
+```
+Learner answer
+     │
+     ▼
+AnswerEvaluation (SGR)
+     │  status: correct / partial / incorrect / unresolved / skipped
+     │  confidence: 0.0–1.0 (model's certainty in the verdict)
+     ▼
+compute_mastery_delta()
+     │  inputs: status, model_confidence, attempt_count, current_mastery
+     ▼
+TopicEvidence row  ──►  MasterySnapshot  ──►  TopicProgressProjection
+     │                        │
+     ▼                        ▼
+AdaptationContext         Plan payload
+(stage_signal,            (mastery_score
+ weak/strong topics,       per section)
+ recent_pattern)
+```
+
+### Delta formula
+
+```
+base = { correct: +0.25, partial: +0.10, incorrect: −0.12, unresolved: −0.03, skipped: −0.05 }
+
+delta = base[status]
+      × (0.5 + 0.5 × model_confidence)       # scale by model certainty
+      × (1.0 − current_mastery × 0.6)         # diminishing returns (positive only)
+      × attempt_penalty                        # correct on 3rd try ≠ correct on 1st
+```
+
+**Attempt penalty** (applied only when `status = correct` and `attempt_count > 1`): `max(0.3, 1.0 − 0.2 × (attempt_count − 1))`.
+
+### Mastery lifecycle
+
+| Concept | Description |
+|---|---|
+| **MasterySnapshot** | Per-section raw score (0.0–1.0), evidence count, last assessment decision. Written on every evaluation. |
+| **Effective mastery** | Raw score × decay multiplier. Used for all runtime decisions. |
+| **Decay** | Half-life model. After a configurable grace period, mastery decays toward zero to encourage revisiting. Controlled by `MASTERY_DECAY_ENABLED`, `MASTERY_DECAY_GRACE_PERIOD_HOURS`, `MASTERY_DECAY_HALF_LIFE_DAYS`. |
+| **Stage signal** | Derived from effective mastery and last assessment: `new` → `needs_support` → `progressing` → `ready`. Injected into every SGR prompt. |
+| **AdaptationContext** | Aggregates current topic mastery, weak/strong related topics, module summary, and recent evidence pattern. Built fresh each turn and passed to the teacher. |
+| **Completed threshold** | Section is marked `completed` when effective mastery ≥ 0.8. |
+
+### Unified assessment vocabulary
+
+All evidence uses `CheckpointEvaluationStatus` values: `correct`, `partial`, `incorrect`, `unresolved`, `skipped`. These are the same values produced by the `AnswerEvaluation` SGR schema and stored in `TopicEvidence.assessment_decision`.
 
 ---
 
