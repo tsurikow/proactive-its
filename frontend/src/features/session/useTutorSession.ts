@@ -15,7 +15,6 @@ import type {
 import { useSessionProgress } from "./useSessionProgress";
 import { useTranscript } from "./useTranscript";
 import { useTeacherSessionMutation } from "./useTutorMutations";
-import { useReadinessQuery } from "./useTutorQueries";
 import { useSessionReadiness } from "./useSessionReadiness";
 
 export type { HealthState, SessionError } from "./types";

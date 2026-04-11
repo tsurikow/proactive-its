@@ -83,7 +83,6 @@ class StageMasteryView(BaseModel):
 class RecentEvidencePattern(BaseModel):
     correct_like_count: int = Field(ge=0)
     support_needed_count: int = Field(ge=0)
-    fallback_confidence_count: int = Field(ge=0)
     latest_assessment_decision: str | None = None
 
 

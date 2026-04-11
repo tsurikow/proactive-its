@@ -202,7 +202,7 @@ class TeacherAction(BaseModel):
     section_id: str | None = None
     module_id: str | None = None
     target_section_id: str | None = None
-    prompt_instruction: str | None = Field(default=None, max_length=1200)
+    prompt_instruction: str | None = None
     question_prompt: str | None = Field(default=None, max_length=400)
     exercise_ref: str | None = Field(default=None, max_length=200)
     hidden_answer_ref: str | None = Field(default=None, max_length=200)

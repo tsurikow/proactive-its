@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.platform.chat.models import Interaction, InteractionSource, SessionRecord
@@ -71,31 +71,6 @@ class InteractionRepository:
                 )
                 await session.execute(stmt)
             return interaction_id
-
-    async def update_interaction_confidence(self, interaction_id: int, confidence: int) -> None:
-        async with get_session() as session:
-            await session.execute(
-                update(Interaction)
-                .where(Interaction.id == interaction_id)
-                .values(confidence=confidence)
-            )
-
-    async def get_interaction(self, interaction_id: int) -> dict[str, Any] | None:
-        async with get_session() as session:
-            row = await session.scalar(select(Interaction).where(Interaction.id == interaction_id))
-            if row is None:
-                return None
-            return {
-                "id": int(row.id),
-                "learner_id": row.learner_id,
-                "session_id": int(row.session_id) if row.session_id is not None else None,
-                "module_id": row.module_id,
-                "section_id": row.section_id,
-                "message": row.message,
-                "answer": row.answer,
-                "confidence": row.confidence,
-                "created_at": row.created_at,
-            }
 
     async def list_interaction_sources(self, interaction_id: int) -> list[dict[str, Any]]:
         async with get_session() as session:

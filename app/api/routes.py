@@ -10,11 +10,6 @@ from app.api.dependencies import (
     get_teacher_runtime,
     require_authenticated_learner,
     get_teacher_state_service,
-    get_teacher_feedback_runtime,
-)
-from app.api.schemas import (
-    FeedbackRequest,
-    FeedbackResponse,
 )
 from app.teacher.models import (
     TeacherSessionRequest,
@@ -99,39 +94,3 @@ async def teacher_session(
         raise HTTPException(status_code=500, detail=f"Failed to execute teacher session: {exc}") from exc
 
 
-@router.post("/teacher/feedback", response_model=FeedbackResponse)
-async def teacher_feedback(
-    request: FeedbackRequest,
-    learner=Depends(require_authenticated_learner),
-    chat_service=Depends(get_chat_service),
-    teacher_feedback_runtime=Depends(get_teacher_feedback_runtime),
-) -> FeedbackResponse:
-    if request.learner_id and request.learner_id != learner.id:
-        raise HTTPException(status_code=403, detail="learner_mismatch")
-    await teacher_feedback_runtime.state_service.ensure_learner(learner.id)
-    interaction = await chat_service.get_feedback_context(learner.id, request.interaction_id)
-    if interaction is None:
-        raise HTTPException(status_code=404, detail="interaction not found")
-
-    await chat_service.record_feedback_confidence(request.interaction_id, request.confidence)
-
-    section_id = interaction.get("section_id")
-    module_id = interaction.get("module_id")
-
-    try:
-        payload = await teacher_feedback_runtime.apply_feedback(
-            learner.id,
-            request.interaction_id,
-            section_id,
-            module_id,
-            request.confidence,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    return FeedbackResponse(
-        updated=True,
-        auto_advanced=payload["auto_advanced"],
-        message=payload.get("message"),
-        current_stage=payload.get("current_stage"),
-    )

@@ -157,23 +157,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/teacher/feedback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Teacher Feedback */
-        post: operations["teacher_feedback_v1_teacher_feedback_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -283,27 +266,6 @@ export interface components {
              * @default true
              */
             requires_answer_check: boolean;
-        };
-        /** FeedbackRequest */
-        FeedbackRequest: {
-            /** Learner Id */
-            learner_id?: string | null;
-            /** Interaction Id */
-            interaction_id: number;
-            /** Confidence */
-            confidence: number;
-            /** Helpful */
-            helpful?: boolean | null;
-        };
-        /** FeedbackResponse */
-        FeedbackResponse: {
-            /** Updated */
-            updated: boolean;
-            /** Auto Advanced */
-            auto_advanced: boolean;
-            /** Message */
-            message?: string | null;
-            current_stage?: components["schemas"]["StageInfo"] | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -458,21 +420,6 @@ export interface components {
             email: string;
             /** Password */
             password: string;
-        };
-        /** StageInfo */
-        StageInfo: {
-            /** Stage Index */
-            stage_index: number;
-            /** Section Id */
-            section_id: string;
-            /** Module Id */
-            module_id?: string | null;
-            /** Parent Doc Id */
-            parent_doc_id?: string | null;
-            /** Title */
-            title?: string | null;
-            /** Breadcrumb */
-            breadcrumb?: string[];
         };
         /** TeacherAction */
         TeacherAction: {
@@ -854,39 +801,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TeacherSessionResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    teacher_feedback_v1_teacher_feedback_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FeedbackRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FeedbackResponse"];
                 };
             };
             /** @description Validation Error */

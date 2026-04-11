@@ -25,7 +25,6 @@ from app.state.repositories.learner_repository import LearnerStateRepository
 from app.state.repositories.session_repository import SessionStateRepository
 from app.state.services.service import TeacherStateService
 from app.teacher.artifacts.artifacts import TeacherArtifactRuntime
-from app.teacher.planning.feedback_service import TeacherFeedbackRuntime
 from app.teacher.engine import TeacherEngine
 from app.teacher.artifacts.lesson_generation import SectionLessonGenerator
 from app.teacher.runtime import TeacherRuntime
@@ -169,17 +168,6 @@ def get_teacher_state_service() -> TeacherStateService:
         settings=settings,
     )
 
-
-@lru_cache(maxsize=1)
-def get_teacher_feedback_runtime() -> TeacherFeedbackRuntime:
-    settings = get_settings()
-    return TeacherFeedbackRuntime(
-        repository=get_teacher_repository(),
-        session_repository=get_session_state_repository(),
-        learner_service=get_learner_service(),
-        state_service=get_teacher_state_service(),
-        settings=settings,
-    )
 
 
 @lru_cache(maxsize=1)

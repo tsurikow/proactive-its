@@ -34,12 +34,6 @@ class RetrievalDebug(BaseModel):
     timings_ms: dict[str, float] | None = None
 
 
-class FeedbackRequest(BaseModel):
-    learner_id: str | None = None
-    interaction_id: int
-    confidence: int = Field(ge=1, le=5)
-    helpful: bool | None = None
-
 
 class AuthLearner(BaseModel):
     id: str
@@ -134,12 +128,6 @@ class PlanProgress(BaseModel):
     mastery_score: float = 0.0
     tree: PlanTreeNode | None = None
 
-
-class FeedbackResponse(BaseModel):
-    updated: bool
-    auto_advanced: bool
-    message: str | None = None
-    current_stage: StageInfo | None = None
 
 
 PlanTreeNode.model_rebuild()

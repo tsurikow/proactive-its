@@ -42,7 +42,7 @@ export function ConversationPanel({ status, transcript, composer }: Conversation
       transcript.clearFocusMessageId();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [transcript]);
+  }, [transcript.focusMessageId]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -52,24 +52,29 @@ export function ConversationPanel({ status, transcript, composer }: Conversation
           const root = event.currentTarget;
           isNearBottomRef.current = root.scrollHeight - root.scrollTop - root.clientHeight <= 100;
         }}
-        className="flex-1 overflow-y-auto px-3 py-4 sm:px-4"
+        className="flex-1 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4"
       >
-        <div className="mx-auto max-w-3xl space-y-3">
+        <div className="mx-auto flex min-h-full max-w-3xl flex-col">
           {transcript.messages.length === 0 ? (
-            <EmptyState />
+            <div className="flex flex-1 items-center justify-center">
+              <EmptyState />
+            </div>
           ) : (
-            transcript.messages.map((message) => (
-              <div
-                key={message.id}
-                ref={(node) => {
-                  messageRefs.current[message.id] = node;
-                }}
-              >
-                <MessageBubble message={message} />
-              </div>
-            ))
+            <div className="space-y-3">
+              {transcript.messages.map((message) => (
+                <div
+                  key={message.id}
+                  ref={(node) => {
+                    messageRefs.current[message.id] = node;
+                  }}
+                  className="msg-enter"
+                >
+                  <MessageBubble message={message} />
+                </div>
+              ))}
+              {status.pendingStatus ? <TypingIndicator text={status.pendingStatus.text} /> : null}
+            </div>
           )}
-          {status.pendingStatus ? <TypingIndicator text={status.pendingStatus.text} /> : null}
         </div>
       </div>
 

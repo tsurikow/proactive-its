@@ -479,8 +479,21 @@ class TeacherRuntime:
             )
 
         # --- Default: teacher turn (understanding signal, acknowledgement, pedagogical reply) ---
+        if intent == LearnerTurnIntentType.TASK_ANSWER and current_pending_task is None:
+            trigger = (
+                f"Learner answered the teacher's question (intent: {intent.value}). "
+                "Evaluate their answer based on the conversation context and respond."
+            )
+        elif intent in {LearnerTurnIntentType.ACKNOWLEDGEMENT, LearnerTurnIntentType.UNDERSTANDING_SIGNAL}:
+            trigger = (
+                f"Learner replied (intent: {intent.value}). "
+                "The student has confirmed understanding. Move forward to the next "
+                "topic, exercise, or section. Do NOT re-explain what was just covered."
+            )
+        else:
+            trigger = f"Learner replied (intent: {intent.value})"
         turn = await self.engine.plan_teacher_turn(
-            trigger=f"Learner replied (intent: {intent.value})",
+            trigger=trigger,
             event_type=request.event_type,
             learner_message=learner_message,
             current_stage=current_stage,
@@ -493,10 +506,37 @@ class TeacherRuntime:
         teacher_action = self._teacher_action_from_turn(turn, current_stage=current_stage)
         proposal = self._proposal_from_turn(turn)
 
+        # Generate lesson on-demand when teacher decides to teach and
+        # artifact_runtime is available (covers deferred OPEN_SESSION flow)
+        lesson: LessonPayload | None = None
+        if (
+            turn.action_type == TeacherActionType.TEACH_SECTION
+            and self.artifact_runtime is not None
+            and current_stage_raw is not None
+            and not state["plan_completed"]
+        ):
+            try:
+                lesson_payload, stage_with_parent = await self.artifact_runtime.get_or_generate_lesson(
+                    learner_id=request.learner_id,
+                    template_id=template_id,
+                    stage=current_stage_raw,
+                    adaptation_context=adaptation_context,
+                    persist_decision=False,
+                    use_agentic=False,
+                    use_learner_model=False,
+                )
+                current_stage_raw = stage_with_parent
+                current_stage = public_stage(stage_with_parent)
+                lesson = LessonPayload.model_validate(lesson_payload)
+            except Exception:
+                logger.warning("Lesson generation failed in learner reply path, continuing without lesson")
+
         await self._record_session_event(
             request=request,
             template_id=template_id,
             current_stage=current_stage_raw,
+            teacher_action=teacher_action,
+            proposal=proposal,
         )
 
         plan = await self.state_service.build_plan_payload(
@@ -507,6 +547,7 @@ class TeacherRuntime:
             teacher_message=turn.teacher_message,
             teacher_action=teacher_action,
             proposal=proposal,
+            lesson=lesson,
             section_understanding=section_understanding,
             current_stage=current_stage,
             plan=plan,
@@ -542,6 +583,18 @@ class TeacherRuntime:
         )
         evaluation = self._evaluation_from_sgr(evaluation_sgr, pending_task=pending_task)
 
+        # Record mastery update from the evaluation
+        await self.learner_service.record_evaluation_update(
+            learner_id=request.learner_id,
+            section_id=pending_task.section_id,
+            module_id=(current_stage_raw or {}).get("module_id"),
+            interaction_id=None,
+            status=evaluation.status.value,
+            model_confidence=evaluation.confidence,
+            attempt_count=pending_task.attempt_count,
+            active_template_id=template_id,
+        )
+
         # If correct — celebrate and potentially advance
         if evaluation.status == CheckpointEvaluationStatus.CORRECT:
             turn = await self.engine.plan_teacher_turn(
@@ -560,6 +613,9 @@ class TeacherRuntime:
             await self._record_session_event(
                 request=request, template_id=template_id,
                 current_stage=current_stage_raw,
+                teacher_action=teacher_action,
+                checkpoint_evaluation=evaluation,
+                proposal=proposal,
             )
 
             plan = await self.state_service.build_plan_payload(
@@ -608,6 +664,9 @@ class TeacherRuntime:
         await self._record_session_event(
             request=request, template_id=template_id,
             current_stage=current_stage_raw,
+            teacher_action=teacher_action,
+            checkpoint_evaluation=evaluation,
+            proposal=proposal,
         )
 
         plan = await self.state_service.build_plan_payload(
@@ -675,6 +734,7 @@ class TeacherRuntime:
         await self._record_session_event(
             request=request, template_id=template_id,
             current_stage=current_stage_raw,
+            teacher_action=teacher_action,
         )
 
         plan = await self.state_service.build_plan_payload(
@@ -811,6 +871,8 @@ class TeacherRuntime:
         await self._record_session_event(
             request=request, template_id=template_id,
             current_stage=current_stage_raw,
+            teacher_action=teacher_action,
+            proposal=proposal,
         )
 
         plan = await self.state_service.build_plan_payload(
@@ -954,10 +1016,10 @@ class TeacherRuntime:
         teacher_action = self._teacher_action_from_turn(turn, current_stage=current_stage)
         proposal = self._proposal_from_turn(turn)
 
-        # Generate lesson if applicable
+        # Generate lesson if applicable (OPEN_SESSION excluded — lesson is
+        # deferred until the student replies to the greeting)
         lesson: LessonPayload | None = None
         should_gen_lesson = request.event_type in {
-            TeacherSessionEventType.OPEN_SESSION,
             TeacherSessionEventType.REQUEST_MOVE_ON,
             TeacherSessionEventType.CONTINUE_SESSION,
         }
@@ -986,6 +1048,8 @@ class TeacherRuntime:
         await self._record_session_event(
             request=request, template_id=template_id,
             current_stage=current_stage_raw,
+            teacher_action=teacher_action,
+            proposal=proposal,
         )
 
         plan = await self.state_service.build_plan_payload(
@@ -1031,7 +1095,17 @@ class TeacherRuntime:
         request: TeacherSessionRequest,
         template_id: str,
         current_stage: dict[str, Any] | None,
+        teacher_action: TeacherAction | None = None,
+        checkpoint_evaluation: CheckpointEvaluation | None = None,
+        proposal: TeacherProposal | None = None,
     ) -> None:
+        payload: dict[str, Any] = {}
+        if teacher_action is not None:
+            payload["teacher_action"] = teacher_action.model_dump(mode="json")
+        if checkpoint_evaluation is not None:
+            payload["checkpoint_evaluation"] = checkpoint_evaluation.model_dump(mode="json")
+        if proposal is not None:
+            payload["proposal"] = proposal.model_dump(mode="json")
         await self.session_repository.append_teacher_session_event(
             learner_id=request.learner_id,
             template_id=template_id,
@@ -1042,7 +1116,7 @@ class TeacherRuntime:
             section_id=None if current_stage is None else str(current_stage.get("section_id") or ""),
             module_id=None if current_stage is None or current_stage.get("module_id") is None else str(current_stage["module_id"]),
             message=request.message,
-            event_payload_json={},
+            event_payload_json=payload,
         )
 
     async def _append_learning_debt(

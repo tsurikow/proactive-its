@@ -272,44 +272,6 @@
           }
         }
       }
-    },
-    "/v1/teacher/feedback": {
-      "post": {
-        "summary": "Teacher Feedback",
-        "operationId": "teacher_feedback_v1_teacher_feedback_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FeedbackRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FeedbackResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
@@ -598,87 +560,6 @@
           "prompt_excerpt"
         ],
         "title": "ExerciseCandidate"
-      },
-      "FeedbackRequest": {
-        "properties": {
-          "learner_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Learner Id"
-          },
-          "interaction_id": {
-            "type": "integer",
-            "title": "Interaction Id"
-          },
-          "confidence": {
-            "type": "integer",
-            "maximum": 5.0,
-            "minimum": 1.0,
-            "title": "Confidence"
-          },
-          "helpful": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Helpful"
-          }
-        },
-        "type": "object",
-        "required": [
-          "interaction_id",
-          "confidence"
-        ],
-        "title": "FeedbackRequest"
-      },
-      "FeedbackResponse": {
-        "properties": {
-          "updated": {
-            "type": "boolean",
-            "title": "Updated"
-          },
-          "auto_advanced": {
-            "type": "boolean",
-            "title": "Auto Advanced"
-          },
-          "message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Message"
-          },
-          "current_stage": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/StageInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "updated",
-          "auto_advanced"
-        ],
-        "title": "FeedbackResponse"
       },
       "HTTPValidationError": {
         "properties": {
@@ -1154,64 +1035,6 @@
         ],
         "title": "SignupRequest"
       },
-      "StageInfo": {
-        "properties": {
-          "stage_index": {
-            "type": "integer",
-            "title": "Stage Index"
-          },
-          "section_id": {
-            "type": "string",
-            "title": "Section Id"
-          },
-          "module_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Module Id"
-          },
-          "parent_doc_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Doc Id"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title"
-          },
-          "breadcrumb": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Breadcrumb"
-          }
-        },
-        "type": "object",
-        "required": [
-          "stage_index",
-          "section_id"
-        ],
-        "title": "StageInfo"
-      },
       "TeacherAction": {
         "properties": {
           "action_type": {
@@ -1259,8 +1082,7 @@
           "prompt_instruction": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 1200
+                "type": "string"
               },
               {
                 "type": "null"

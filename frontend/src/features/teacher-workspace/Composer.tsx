@@ -1,12 +1,27 @@
+import { useEffect, useRef } from "react";
 import { Send } from "lucide-react";
 
 import type { ComposerState } from "../session/types";
 
 export function Composer({ composer }: { composer: ComposerState }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+  }, [composer.value]);
+
+  const sendAndRefocus = () => {
+    void composer.send().then(() => textareaRef.current?.focus());
+  };
+
   return (
-    <div className="border-t border-[color:var(--line-soft)] bg-[color:var(--surface)] px-3 pb-[env(safe-area-inset-bottom,0.5rem)] pt-2 sm:px-4">
+    <div className="border-t border-[color:var(--line-soft)] bg-[color:var(--surface)] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0.75rem))] pt-2 sm:px-4">
       <div className="mx-auto flex max-w-3xl items-end gap-2">
         <textarea
+          ref={textareaRef}
           rows={1}
           value={composer.value}
           onChange={(event) => composer.setValue(event.target.value)}
@@ -16,13 +31,13 @@ export function Composer({ composer }: { composer: ComposerState }) {
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              void composer.send();
+              sendAndRefocus();
             }
           }}
         />
         <button
           type="button"
-          onClick={() => void composer.send()}
+          onClick={sendAndRefocus}
           disabled={!composer.value.trim() || composer.disabled}
           className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[color:var(--accent-strong)] text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
           aria-label="Send message"

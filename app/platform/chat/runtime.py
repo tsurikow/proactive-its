@@ -423,14 +423,5 @@ class ChatService:
             },
         }
 
-    async def get_feedback_context(self, learner_id: str, interaction_id: int) -> dict[str, Any] | None:
-        interaction = await self.interaction_repository.get_interaction(interaction_id)
-        if not interaction or interaction["learner_id"] != learner_id:
-            return None
-        return interaction
-
-    async def record_feedback_confidence(self, interaction_id: int, confidence: int) -> None:
-        await self.interaction_repository.update_interaction_confidence(interaction_id, confidence)
-
 
 __all__ = ["ChatService"]

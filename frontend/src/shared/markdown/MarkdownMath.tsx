@@ -9,7 +9,7 @@ import { preprocessMarkdown } from "./markdown";
 import { markdownComponents } from "./renderShared";
 
 const remarkPlugins = [remarkGfm, remarkMath];
-const rehypePlugins = [rehypeKatex];
+const rehypePlugins = [[rehypeKatex, { throwOnError: false, errorColor: "#cc0000" }]];
 
 export interface MarkdownMathProps {
   content: string;

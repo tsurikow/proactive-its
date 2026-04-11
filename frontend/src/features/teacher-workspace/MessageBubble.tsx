@@ -64,7 +64,7 @@ function CopyButton({ content }: { content: string }) {
 function messageCardClass(message: FeedMessage): string {
   const base = "px-4 py-3 rounded-[var(--radius-lg)]";
   if (message.role === "user") {
-    return `ml-auto max-w-[85%] ${base} bg-[color:var(--accent-soft)] text-[color:var(--ink-strong)]`;
+    return `ml-auto max-w-[85%] ${base} bg-[color:var(--student-bubble)] text-[color:var(--ink-strong)]`;
   }
   if (message.role === "error") {
     return `max-w-[85%] ${base} border border-rose-200 bg-rose-50`;

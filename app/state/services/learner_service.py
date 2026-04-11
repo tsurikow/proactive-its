@@ -17,6 +17,41 @@ from app.platform.config import Settings, get_settings
 from app.platform.db import get_session
 from app.state.repositories.learner_repository import LearnerStateRepository
 
+# Unified mastery delta bases — keyed by CheckpointEvaluationStatus values.
+_MASTERY_DELTA_BASE: dict[str, float] = {
+    "correct": 0.25,
+    "partial": 0.10,
+    "incorrect": -0.12,
+    "unresolved": -0.03,
+    "skipped": -0.05,
+}
+
+
+def compute_mastery_delta(
+    status: str,
+    model_confidence: float,
+    attempt_count: int,
+    current_mastery: float,
+) -> float:
+    """Compute mastery change from a checkpoint evaluation.
+
+    Takes into account model confidence, attempt count, and current mastery
+    to produce diminishing-returns positive deltas and proportional negatives.
+    """
+    base = _MASTERY_DELTA_BASE.get(status, -0.05)
+
+    # Model confidence scales the delta (range 0.5–1.0×)
+    base *= 0.5 + 0.5 * max(0.0, min(1.0, model_confidence))
+
+    # Positive deltas: diminishing returns as mastery approaches 1.0
+    if base > 0:
+        base *= 1.0 - current_mastery * 0.6
+        # Penalty for multiple attempts on the same task
+        if attempt_count > 1:
+            base *= max(0.3, 1.0 - 0.2 * (attempt_count - 1))
+
+    return round(base, 4)
+
 
 class LearnerService:
     def __init__(
@@ -32,7 +67,49 @@ class LearnerService:
         self.settings = settings or get_settings()
         self._now_provider = now_provider or (lambda: datetime.now(UTC))
 
-    async def record_feedback_update(self, update: MasteryUpdate) -> dict[str, Any]:
+    async def record_evaluation_update(
+        self,
+        *,
+        learner_id: str,
+        section_id: str,
+        module_id: str | None,
+        interaction_id: int | None,
+        status: str,
+        model_confidence: float,
+        attempt_count: int,
+        active_template_id: str | None,
+    ) -> dict[str, Any]:
+        """Record a mastery update from an in-session checkpoint evaluation."""
+        mastery_map = await self._current_mastery_map(learner_id)
+        current_mastery = mastery_map.get(section_id, 0.0)
+        delta = compute_mastery_delta(status, model_confidence, attempt_count, current_mastery)
+        new_mastery = max(0.0, min(1.0, current_mastery + delta))
+        mastery_status = "completed" if new_mastery >= 0.8 else "in_progress"
+
+        update = MasteryUpdate(
+            learner_id=learner_id,
+            section_id=section_id,
+            module_id=module_id,
+            interaction_id=interaction_id,
+            source_kind="checkpoint_evaluation",
+            assessment_decision=status,
+            mastery_delta=delta,
+            mastery_before=current_mastery,
+            mastery_after=new_mastery,
+            status_after=mastery_status,
+            active_template_id=active_template_id,
+        )
+        return await self._persist_mastery_update(update)
+
+    async def _current_mastery_map(self, learner_id: str) -> dict[str, float]:
+        snapshots = await self.repo.list_mastery_snapshots(learner_id)
+        return {
+            str(s["section_id"]): float(s.get("mastery_score", 0.0))
+            for s in snapshots
+        }
+
+    async def _persist_mastery_update(self, update: MasteryUpdate) -> dict[str, Any]:
+        """Low-level persistence: evidence + snapshot + projection."""
         async with self._session_scope() as session:
             profile = await self.repo.get_or_create_profile(
                 update.learner_id,
@@ -291,7 +368,7 @@ class LearnerService:
     def _stage_signal(current_topic: StageMasteryView | None) -> str:
         if current_topic is None:
             return "new"
-        if current_topic.last_assessment_decision in {"misconception", "procedural_error"}:
+        if current_topic.last_assessment_decision in {"incorrect", "unresolved"}:
             return "needs_support"
         if current_topic.effective_mastery_score < 0.5:
             return "needs_support"
@@ -350,17 +427,15 @@ class LearnerService:
             None,
         )
         correct_like_count = sum(
-            1 for item in recent_evidence if item.get("assessment_decision") in {"correct", "partially_correct"}
+            1 for item in recent_evidence if item.get("assessment_decision") in {"correct", "partial"}
         )
         support_needed_count = sum(
             1
             for item in recent_evidence
-            if item.get("assessment_decision") in {"misconception", "procedural_error", "off_topic", "insufficient_evidence"}
+            if item.get("assessment_decision") in {"incorrect", "unresolved", "skipped"}
         )
-        fallback_confidence_count = sum(1 for item in recent_evidence if item.get("source_kind") == "feedback_confidence")
         return RecentEvidencePattern(
             correct_like_count=correct_like_count,
             support_needed_count=support_needed_count,
-            fallback_confidence_count=fallback_confidence_count,
             latest_assessment_decision=latest_assessment_decision,
         )

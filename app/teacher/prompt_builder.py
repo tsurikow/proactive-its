@@ -53,6 +53,16 @@ def _conversation_block(history: list[dict[str, str]]) -> str:
     return "\n".join(lines)
 
 
+def _last_teacher_message(history: list[dict[str, str]]) -> str | None:
+    """Extract the last teacher message from history."""
+    for turn in reversed(history):
+        if turn.get("role") == "teacher":
+            text = turn.get("text", "").strip()
+            if text:
+                return text[:500]
+    return None
+
+
 def _stage_description(stage: dict[str, Any] | None) -> str:
     """Describe the current stage/section."""
     if not stage:
@@ -204,6 +214,12 @@ def build_teacher_turn_prompt(
         trigger_text = f"{trigger} (event: {event_type.value})"
     if learner_message:
         trigger_text += f"\n\nLearner said: \"{learner_message}\""
+    if event_type == TeacherSessionEventType.OPEN_SESSION:
+        trigger_text += (
+            "\n\nThis is a SESSION START. Your message should be a brief greeting "
+            "or recap of where you left off. Do NOT deliver learning material yet — "
+            "wait for the student's response first."
+        )
     parts.append(_section("What happened", trigger_text))
 
     parts.append(_section("Current section", _stage_description(current_stage)))
@@ -245,6 +261,14 @@ def build_teacher_turn_prompt(
         parts.append(_section("Navigation options", "\n".join(nav_parts)))
 
     parts.append(_section("Recent conversation", _conversation_block(conversation_history)))
+
+    # Surface last teacher message to prevent repetition
+    last_teacher_msg = _last_teacher_message(conversation_history)
+    if last_teacher_msg:
+        parts.append(_section(
+            "Your last message (DO NOT repeat)",
+            last_teacher_msg,
+        ))
 
     if learner_memory:
         parts.append(_section("Learner profile", _learner_memory_summary(learner_memory)))
