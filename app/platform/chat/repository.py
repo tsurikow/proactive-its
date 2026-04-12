@@ -368,6 +368,50 @@ class DurableChatRepository:
                 )
             )
 
+    async def list_completed_turns(
+        self,
+        learner_id: str,
+        *,
+        limit: int = 50,
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """Return recent completed turns in chronological order (oldest first)."""
+        async with get_session() as session:
+            rows = (
+                await session.scalars(
+                    select(ChatTurn)
+                    .where(
+                        ChatTurn.learner_id == learner_id,
+                        ChatTurn.state == "completed",
+                        ChatTurn.final_result_json.isnot(None),
+                    )
+                    .order_by(ChatTurn.created_at.desc())
+                    .limit(limit + 1)
+                )
+            ).all()
+        has_more = len(rows) > limit
+        turns = rows[:limit]
+        result = [chat_turn_row_to_dict(row) for row in reversed(turns)]
+        return result, has_more
+
+    async def get_pending_turn(
+        self,
+        learner_id: str,
+    ) -> dict[str, Any] | None:
+        """Return the most recent non-completed turn, if any."""
+        async with get_session() as session:
+            row = await session.scalar(
+                select(ChatTurn)
+                .where(
+                    ChatTurn.learner_id == learner_id,
+                    ChatTurn.state.in_(["accepted", "queued", "running"]),
+                )
+                .order_by(ChatTurn.created_at.desc())
+                .limit(1)
+            )
+        if row is None:
+            return None
+        return chat_turn_row_to_dict(row)
+
     async def list_recent_turns_for_request(
         self,
         *,

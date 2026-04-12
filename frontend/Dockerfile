@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:22.22.2-alpine AS build
 
 WORKDIR /app
 
@@ -22,7 +22,7 @@ ENV VITE_AUTH_RESET_ENABLED=$VITE_AUTH_RESET_ENABLED
 
 RUN pnpm run build
 
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.28.3-alpine AS runtime
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html

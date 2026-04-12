@@ -1,6 +1,7 @@
 import type {
   AuthResponse,
   ReadinessResponse,
+  SessionHistoryResponse,
   TeacherSessionRequest,
   TeacherSessionResult,
 } from "../types/api";
@@ -124,12 +125,111 @@ export function getReadiness(): Promise<ReadinessResponse> {
   return request<ReadinessResponse>("/health/ready", { method: "GET" }, { allowStatuses: [503] });
 }
 
-export async function runTeacherSession(requestPayload: TeacherSessionRequest): Promise<TeacherSessionResult> {
-  const result = await request<TeacherSessionResult>("/teacher/session", {
-    method: "POST",
-    body: JSON.stringify(requestPayload),
-  });
-  return normalizeTeacherSessionResult(result);
+export async function runTeacherSession(
+  requestPayload: TeacherSessionRequest,
+  onProgress?: (status: string) => void,
+): Promise<TeacherSessionResult> {
+  return streamTeacherSession(requestPayload, onProgress);
+}
+
+async function streamTeacherSession(
+  requestPayload: TeacherSessionRequest,
+  onProgress?: (status: string) => void,
+): Promise<TeacherSessionResult> {
+  const controller = new AbortController();
+  let didTimeout = false;
+  const timeout = window.setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/teacher/session/stream`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestPayload),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const raw = await response.text();
+      const parsed = tryParseJson(raw);
+      const detail = parsed?.detail ?? raw ?? `Request failed with status ${response.status}`;
+      throw new ApiError(typeof detail === "string" ? detail : JSON.stringify(detail), response.status, "HTTP", parsed);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new ApiError("No response body", null, "NETWORK");
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const events = parseSSEBuffer(buffer);
+      buffer = events.remaining;
+
+      for (const evt of events.parsed) {
+        if (evt.event === "progress" && onProgress) {
+          const data = tryParseJson(evt.data);
+          onProgress(data?.state ?? "processing");
+        }
+        if (evt.event === "result") {
+          const data = tryParseJson(evt.data);
+          if (data) return normalizeTeacherSessionResult(data as TeacherSessionResult);
+        }
+        if (evt.event === "error") {
+          const data = tryParseJson(evt.data);
+          throw new ApiError(data?.detail ?? "Teacher session failed", null, "HTTP", data);
+        }
+      }
+    }
+
+    // Stream ended without result — fall through to error
+    throw new ApiError("Stream ended without result", null, "NETWORK");
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError(didTimeout ? "Request timed out." : "Request cancelled.", null, didTimeout ? "TIMEOUT" : "ABORT");
+    }
+    throw new ApiError("Network error. Check API connectivity.", null, "NETWORK");
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+interface SSEEvent {
+  event: string;
+  data: string;
+}
+
+function parseSSEBuffer(buffer: string): { parsed: SSEEvent[]; remaining: string } {
+  const parsed: SSEEvent[] = [];
+  const blocks = buffer.split("\n\n");
+  const remaining = blocks.pop() ?? "";
+
+  for (const block of blocks) {
+    if (!block.trim()) continue;
+    let event = "message";
+    let data = "";
+    for (const line of block.split("\n")) {
+      if (line.startsWith("event: ")) event = line.slice(7);
+      else if (line.startsWith("data: ")) data = line.slice(6);
+    }
+    if (event && data) parsed.push({ event, data });
+  }
+
+  return { parsed, remaining };
+}
+
+export function getSessionHistory(limit = 50): Promise<SessionHistoryResponse> {
+  return request<SessionHistoryResponse>(`/teacher/session/history?limit=${limit}`, { method: "GET" });
 }
 
 export function getCurrentLearner(): Promise<AuthResponse> {

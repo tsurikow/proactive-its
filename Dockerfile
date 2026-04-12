@@ -1,8 +1,8 @@
-FROM python:3.13-slim AS builder
+FROM python:3.13.13-slim AS builder
 
 WORKDIR /app
 
-COPY --from=ghcr.io/astral-sh/uv:0.11.2 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.6 /uv /uvx /bin/
 
 ENV UV_LINK_MODE=copy
 ENV UV_COMPILE_BYTECODE=1
@@ -22,7 +22,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
 
 
-FROM python:3.13-slim AS runtime
+FROM python:3.13.13-slim AS runtime
 
 RUN adduser --system --no-create-home appuser
 

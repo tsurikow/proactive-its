@@ -1,12 +1,13 @@
 import { useState } from "react";
 
-import type { TeacherSessionResult } from "../../types/api";
+import type { SessionHistoryTurn, TeacherSessionResult } from "../../types/api";
 import { nextMessageId, toLessonMessages, type FeedMessage } from "./messages";
 
 export interface TranscriptActions {
   appendUserMessage: (content: string) => void;
   appendTeacherTurn: (result: TeacherSessionResult, options?: { replaceMessages?: boolean }) => void;
   appendError: (message: string) => void;
+  hydrateFromHistory: (turns: SessionHistoryTurn[]) => void;
   reset: () => void;
   focusMessageId: string | null;
   clearFocusMessageId: () => void;
@@ -82,6 +83,42 @@ export function useTranscript(): TranscriptActions {
     ]);
   };
 
+  const hydrateFromHistory = (turns: SessionHistoryTurn[]) => {
+    const restored: FeedMessage[] = [];
+    for (const turn of turns) {
+      if (turn.learner_message) {
+        restored.push({
+          id: nextMessageId(),
+          role: "user",
+          kind: "chat",
+          content: turn.learner_message,
+        });
+      }
+      const r = turn.result;
+      if (r.teacher_message.trim()) {
+        restored.push({
+          id: nextMessageId(),
+          role: "assistant",
+          kind: "chat",
+          title: "Teacher",
+          content: r.teacher_message,
+          citations: r.citations ?? [],
+          interactionId: r.interaction_id ?? undefined,
+          checkpointEvaluation: r.checkpoint_evaluation ?? null,
+        });
+      }
+      restored.push(...toLessonMessages(r.lesson ?? null));
+    }
+    setMessages(restored);
+    // Focus the last assistant message
+    for (let i = restored.length - 1; i >= 0; i--) {
+      if (restored[i].role === "assistant" && restored[i].kind !== "system") {
+        setFocusMessageId(restored[i].id);
+        break;
+      }
+    }
+  };
+
   const reset = () => {
     setMessages([]);
     setFocusMessageId(null);
@@ -94,6 +131,7 @@ export function useTranscript(): TranscriptActions {
     appendUserMessage,
     appendTeacherTurn,
     appendError,
+    hydrateFromHistory,
     reset,
   };
 }

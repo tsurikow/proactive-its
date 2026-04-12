@@ -77,6 +77,20 @@ export type TeacherSessionResult = Omit<
   retrieval_debug?: RetrievalDebug | null;
 };
 
+export interface SessionHistoryTurn {
+  turn_id: string;
+  event_type: string;
+  learner_message: string | null;
+  result: TeacherSessionResult;
+  created_at: string;
+}
+
+export interface SessionHistoryResponse {
+  turns: SessionHistoryTurn[];
+  has_more: boolean;
+  pending_turn_id: string | null;
+}
+
 export interface ReadinessResponse {
   status: "ready" | "not_ready";
   database_ready: boolean;
