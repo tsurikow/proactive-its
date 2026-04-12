@@ -463,3 +463,17 @@ class TeacherSessionResult(BaseModel):
     retrieval_debug: dict[str, Any] | None = None
 
 
+class SessionHistoryTurn(BaseModel):
+    turn_id: str
+    event_type: str
+    learner_message: str | None = None
+    result: TeacherSessionResult
+    created_at: datetime
+
+
+class SessionHistoryResponse(BaseModel):
+    turns: list[SessionHistoryTurn]
+    has_more: bool = False
+    pending_turn_id: str | None = None
+
+

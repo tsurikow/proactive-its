@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { getSessionHistory } from "../../api/client";
 import type { AuthLearner, TeacherAction } from "../../types/api";
 import { normalizeApiError } from "./errors";
 import { useRequestGuards } from "./requestGuards";
@@ -128,6 +129,8 @@ export function useTutorSession(authLearner: AuthLearner | null): TutorSessionSt
     await runAction(action);
   };
 
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
   useEffect(() => {
     invalidateRequests();
     progress.reset();
@@ -135,7 +138,32 @@ export function useTutorSession(authLearner: AuthLearner | null): TutorSessionSt
     setChatInput("");
     setPendingStatus(null);
     setError(null);
+    setHistoryLoaded(false);
   }, [learnerId]);
+
+  // Auto-restore session history on mount / learner change
+  useEffect(() => {
+    if (!learnerId || !canInteract || historyLoaded) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const history = await getSessionHistory();
+        if (cancelled) return;
+        if (history.turns.length > 0) {
+          transcript.hydrateFromHistory(history.turns);
+          const last = history.turns[history.turns.length - 1];
+          progress.applyResult(last.result);
+          setHistoryLoaded(true);
+          if (history.pending_turn_id) {
+            setPendingStatus({ kind: "session", text: "Teacher is still processing..." });
+          }
+        }
+      } catch {
+        // History unavailable — user can start manually
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [learnerId, canInteract]);
 
   return {
     status: {

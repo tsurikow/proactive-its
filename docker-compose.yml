@@ -14,7 +14,7 @@ x-data-volume: &data-volume
 
 services:
   postgres:
-    image: postgres:18
+    image: postgres:18.3
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-proactive_its}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -33,7 +33,7 @@ services:
     restart: unless-stopped
 
   qdrant:
-    image: qdrant/qdrant:v1.16.3
+    image: qdrant/qdrant:v1.17.1
     expose:
       - "${QDRANT_INTERNAL_PORT:-6333}"
     volumes:
@@ -46,7 +46,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:8-alpine
+    image: redis:8.6.2-alpine
     expose:
       - "6379"
     healthcheck:
@@ -61,7 +61,7 @@ services:
     restart: unless-stopped
 
   rabbitmq:
-    image: rabbitmq:4-management
+    image: rabbitmq:4.2.5-management
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-proactive}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-change-me-rabbitmq-password}

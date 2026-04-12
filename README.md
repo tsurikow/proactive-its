@@ -1,5 +1,22 @@
 # Proactive ITS
 
+![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-7-646CFF?logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white)
+
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white)
+![RabbitMQ](https://img.shields.io/badge/RabbitMQ-FF6600?logo=rabbitmq&logoColor=white)
+![Celery](https://img.shields.io/badge/Celery-37814A?logo=celery&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
+
+![PydanticAI](https://img.shields.io/badge/PydanticAI-E92063?logo=pydantic&logoColor=white)
+![Qdrant](https://img.shields.io/badge/Qdrant-24386C?logo=qdrant&logoColor=white)
+![OpenRouter](https://img.shields.io/badge/OpenRouter-6366F1?logoColor=white)
+
 An LLM-first intelligent tutoring system. A teacher AI drives the session loop — it reads learner state, reasons over the curriculum, and decides what to teach, ask, or repair — using structured generation at every decision point.
 
 ---
@@ -10,7 +27,7 @@ An LLM-first intelligent tutoring system. A teacher AI drives the session loop �
 - [SGR — Schema-Guided Reasoning](#sgr--schema-guided-reasoning)
 - [Learner memory](#learner-memory)
 - [Mastery tracking](#mastery-tracking)
-- [Async infrastructure: Celery · RabbitMQ · Redis](#async-infrastructure-celery--rabbitmq--redis)
+- [Async infrastructure: Celery · RabbitMQ · Redis · SSE](#async-infrastructure-celery--rabbitmq--redis--sse)
 - [Stack & libraries](#stack--libraries)
 - [Quick start](#quick-start)
 - [Configuration](#configuration)
@@ -23,30 +40,43 @@ An LLM-first intelligent tutoring system. A teacher AI drives the session loop �
 
 ```
 Browser (React + Vite)
-     │  HTTP / cookie auth
+     │  POST + SSE stream / cookie auth
      ▼
-FastAPI  ──►  Teacher Runtime (durable wrapper)
-     │              │
-     │         create turn bundle (Postgres)
-     │         enqueue → RabbitMQ
-     │         wait   → Redis pub/sub or DB poll
+nginx  ──►  FastAPI
+     │           │
+     │      POST /teacher/session/stream
+     │           │
+     │      Teacher Runtime
+     │           ├── validate_request()
+     │           ├── dispatch_or_inline()
+     │           │     ├── create turn bundle (Postgres)
+     │           │     └── enqueue → RabbitMQ
+     │           └── SSE generator
+     │                 ├── event: accepted
+     │                 ├── event: progress  (state changes)
+     │                 └── event: result    (full TeacherSessionResult)
      │
-     │    RabbitMQ ──► Celery Worker
-     │                     │
-     │               Teacher Runtime (inner)
-     │                     │
-     │                ┌────┼─────────────────┐
-     │                │    │                  │
-     │           TeacherEngine          Chat Service
-     │           (SGR calls)          (RAG pipeline)
-     │                │                  │
-     │           OpenRouter API       Qdrant
-     │           (PydanticAI)      (vector search)
+     │      RabbitMQ ──► Celery Worker
+     │                        │
+     │                  Teacher Runtime (inner)
+     │                        │
+     │                   ┌────┼─────────────────┐
+     │                   │    │                  │
+     │              TeacherEngine          Chat Service
+     │              (SGR calls)          (RAG pipeline)
+     │                   │                  │
+     │              OpenRouter API       Qdrant
+     │              (PydanticAI)      (vector search)
+     │
+     │      GET /teacher/session/history
+     │           └── restore transcript + progress on page reload
      │
      └──►  State services (Postgres)
 ```
 
 The teacher owns the session. The learner sends events — message, answer, navigation signal — and the teacher responds with a pedagogical action: explain, ask, assign, propose a move. All decisions pass through typed SGR schemas; there are no free-form agent tool calls.
+
+The frontend communicates via SSE streaming: a POST creates the turn and returns an event stream. On page reload, the full session is restored from the history endpoint — no state is lost.
 
 ---
 
@@ -171,33 +201,49 @@ All evidence uses `CheckpointEvaluationStatus` values: `correct`, `partial`, `in
 
 ---
 
-## Async infrastructure: Celery · RabbitMQ · Redis
+## Async infrastructure: Celery · RabbitMQ · Redis · SSE
 
-The teacher runtime is compute-heavy (3–5 LLM calls per turn, up to 300 s total). All LLM work runs in a Celery worker process; the FastAPI process only creates a durable turn record, enqueues the task, and waits for the result.
+The teacher runtime is compute-heavy (3–5 LLM calls per turn, up to 300 s total). All LLM work runs in a Celery worker process; the FastAPI process only creates a durable turn record, enqueues the task, and streams status to the client via SSE.
+
+### Request lifecycle
 
 ```
-POST /v1/teacher/session
+POST /v1/teacher/session/stream
   │
-  ├── [inline path, durable_chat_enabled=false]
-  │     Run execute_session_inner() in the API process (simple, no queue)
+  ├── validate_request()  — check event type, required fields
+  ├── dispatch_or_inline()
+  │     ├── [inline path, durable_chat_enabled=false]
+  │     │     Run execute_session_inner() in the API process, return immediate result
+  │     │
+  │     └── [durable path, durable_chat_enabled=true]  (default)
+  │           1. Derive request_key (idempotency via SHA-256 hash)
+  │           2. Write ChatTurn + TeacherJob + OutboxEvent to Postgres (single tx)
+  │           3. Publish task to RabbitMQ via Celery send_task()
+  │           4. Return turn_id (no blocking wait)
   │
-  └── [durable path, durable_chat_enabled=true]  (default)
-        1. Derive request_key (idempotency via SHA-256 hash)
-        2. Write ChatTurn + TeacherJob + OutboxEvent to Postgres (single tx)
-        3. Publish task to RabbitMQ via Celery send_task()
-        4. Wait — Redis pub/sub on `chat_turn:{turn_id}`, fallback to DB polling
-        5. Celery worker claims the turn, runs execute_session_inner()
-           (all intent paths: TASK_ANSWER, NAVIGATION, GROUNDED_REPLY, default)
-        6. Worker saves result to ChatTurn.final_result_json
-        7. Worker publishes "done" to Redis channel
-        8. API unblocks, deserialises TeacherSessionResult, returns JSON to client
+  └── SSE generator (StreamingResponse, media_type="text/event-stream")
+        1. yield event: accepted  {turn_id}
+        2. Poll DB every 2s (Redis pub/sub as optimization hint to skip sleep)
+        3. yield event: progress  {state} on state changes
+        4. yield event: result    {TeacherSessionResult} when completed
+        5. yield event: error     {detail} on failure or timeout
 ```
+
+**Why DB polling over pure Redis pub/sub:** Redis pub/sub has a race condition — the worker can publish "done" before the SSE generator subscribes. DB polling every 2 seconds is the primary strategy; Redis pub/sub, when available, simply wakes the poller early.
 
 Every intent path goes through the worker — not just RAG. Inside the worker, the grounded-reply path calls the RAG pipeline directly (no nested queue dispatch).
 
 **Degraded execution:** If RabbitMQ is unreachable, the API falls back to running `execute_session_inner()` inline and marks the turn as `degraded_execution=true`.
 
 **Idempotency:** Duplicate requests with the same `x-request-id` header hit the same `request_key` and return the cached result without re-execution.
+
+**Sync fallback:** `POST /v1/teacher/session` still works for clients that cannot use SSE — it blocks until the turn completes and returns the result as plain JSON.
+
+### Session history and restoration
+
+`GET /v1/teacher/session/history` returns the learner's completed turns from Postgres (up to `?limit=200`). Each turn includes the original learner message, event type, full `TeacherSessionResult`, and a timestamp. If there is a turn still in progress, `pending_turn_id` is returned.
+
+The frontend calls this endpoint on page load. If turns exist, the transcript and mastery progress are hydrated from history — nothing is lost on refresh or restart.
 
 ### Components
 
@@ -208,7 +254,7 @@ Every intent path goes through the worker — not just RAG. Inside the worker, t
 - `run_memory_synthesis` — synthesises learner memory asynchronously (max 2 retries, fire-and-forget)
 
 **Redis** — two roles:
-1. Pub/sub notification channel (`chat_turn:{turn_id}`) so the API process knows exactly when a turn completes, without polling Postgres.
+1. Pub/sub hint channel (`chat_turn:{turn_id}`) — wakes the SSE poller early when a turn completes. Not the primary notification mechanism (DB polling is).
 2. Embedding cache (`redis_cache_ttl_seconds`, default 24 h) — avoids re-computing embeddings for repeated queries.
 
 ### Postgres outbox pattern
@@ -253,7 +299,7 @@ This avoids the dual-write problem (writing to DB and publishing to a broker in 
 | **React 19** | UI framework |
 | **Vite 7** | Build tool and dev server |
 | **TypeScript** | Type safety across the frontend |
-| **TanStack Query** | Server state management — session, readiness polling, mutations |
+| **TanStack Query** | Server state management — session history, readiness polling, mutations |
 | **Tailwind CSS 4** | Utility-first styling |
 | **react-markdown** | Renders teacher messages (Markdown) |
 | **remark-math / rehype-katex** | LaTeX math rendering in messages |
@@ -334,7 +380,7 @@ All settings live in `.env` and map to `app/platform/config.py`.
 | Variable | Default | Description |
 |---|---|---|
 | `OPENROUTER_API_KEY` | — | Required. OpenRouter API key |
-| `OPENROUTER_MODEL` | `google/gemini-2.5-flash-lite` | Default model for all SGR calls |
+| `OPENROUTER_MODEL` | `google/gemini-2.5-flash` | Default model for all SGR calls |
 | `TEACHER_REASONING_MODEL` | `google/gemini-2.5-flash` | Overrides model for teacher turn generation |
 | `TEACHER_ANSWER_CHECK_MODEL` | — | Optional override for answer evaluation |
 | `TEACHER_SECTION_UNDERSTANDING_MODEL` | — | Optional override for section analysis |
@@ -436,7 +482,7 @@ docker compose run --rm indexer --force
 | `indexer` | Indexes content into Qdrant (profile `ops`, run manually) |
 | `api` | FastAPI application |
 | `worker` | Celery worker — executes teacher session turns and memory synthesis (`chat_generation` queue) |
-| `web` | Nginx serving built frontend + reverse proxy to API |
+| `web` | Nginx serving built frontend + reverse proxy to API (SSE stream location has `proxy_buffering off`) |
 
 ### First deploy
 

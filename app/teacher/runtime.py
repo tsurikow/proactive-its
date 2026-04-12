@@ -268,29 +268,31 @@ class TeacherRuntime:
     # Main entry point (API-side durable wrapper)
     # ------------------------------------------------------------------
 
-    async def execute_session(
-        self,
-        request: TeacherSessionRequest,
-        *,
-        chat_service: Any | None = None,
-        request_id: str | None = None,
-        client_request_id: str | None = None,
-    ) -> TeacherSessionResult:
-        """API-side entry: validate, dispatch to Celery worker, wait for result."""
+    def validate_request(self, request: TeacherSessionRequest) -> None:
+        """Validate request preconditions, raise RuntimeError on failure."""
         if (
             request.event_type == TeacherSessionEventType.LEARNER_REPLY
             and not request.message
             and request.learner_signal is None
         ):
             raise RuntimeError("message_required")
-
         if not self.engine.is_available():
             raise RuntimeError("llm_unavailable")
 
+    async def dispatch_or_inline(
+        self,
+        request: TeacherSessionRequest,
+        *,
+        chat_service: Any | None = None,
+        client_request_id: str | None = None,
+    ) -> tuple[str | None, TeacherSessionResult | None]:
+        """Create bundle, publish to Celery. Returns (turn_id, None) on success,
+        or (turn_id, result) if completed/degraded inline."""
         if not self.settings.durable_chat_enabled:
-            return await self.execute_session_inner(request, chat_service=chat_service)
+            result = await self.execute_session_inner(request, chat_service=chat_service)
+            return None, result
 
-        from app.api.dependencies import get_durable_chat_repository, get_redis_cache
+        from app.api.dependencies import get_durable_chat_repository
 
         repo = get_durable_chat_repository()
         request_key = self._derive_session_request_key(request, client_request_id=client_request_id)
@@ -310,20 +312,19 @@ class TeacherRuntime:
 
         # Idempotency: already completed
         if turn.get("state") == "completed" and turn.get("final_result_json"):
-            return TeacherSessionResult.model_validate(turn["final_result_json"])
+            return turn["id"], TeacherSessionResult.model_validate(turn["final_result_json"])
 
         # Failed previously: degrade to inline
         if turn.get("state") == "failed":
             await repo.mark_chat_turn_degraded(turn["id"], fallback_reason="retry_after_failure")
             result = await self.execute_session_inner(request, chat_service=chat_service)
-            result_json = result.model_dump(mode="json")
             await repo.complete_chat_turn(
                 turn_id=turn["id"],
                 final_interaction_id=None,
-                final_result_json=result_json,
+                final_result_json=result.model_dump(mode="json"),
                 worker_metadata_json={"degraded_execution": True},
             )
-            return result
+            return turn["id"], result
 
         # Publish to Celery
         if bundle["created"] or turn.get("state") == "accepted":
@@ -331,17 +332,37 @@ class TeacherRuntime:
             if not published:
                 await repo.mark_chat_turn_degraded(turn["id"], fallback_reason=reason)
                 result = await self.execute_session_inner(request, chat_service=chat_service)
-                result_json = result.model_dump(mode="json")
                 await repo.complete_chat_turn(
                     turn_id=turn["id"],
                     final_interaction_id=None,
-                    final_result_json=result_json,
+                    final_result_json=result.model_dump(mode="json"),
                     worker_metadata_json={"degraded_execution": True, "fallback_reason": reason},
                 )
-                return result
+                return turn["id"], result
+
+        return turn["id"], None
+
+    async def execute_session(
+        self,
+        request: TeacherSessionRequest,
+        *,
+        chat_service: Any | None = None,
+        request_id: str | None = None,
+        client_request_id: str | None = None,
+    ) -> TeacherSessionResult:
+        """API-side entry: validate, dispatch to Celery worker, wait for result."""
+        self.validate_request(request)
+
+        turn_id, result = await self.dispatch_or_inline(
+            request, chat_service=chat_service, client_request_id=client_request_id,
+        )
+        if result is not None:
+            return result
 
         # Wait for worker completion
-        result_json = await self._wait_for_session_completion(turn["id"], repo, get_redis_cache())
+        from app.api.dependencies import get_durable_chat_repository, get_redis_cache
+
+        result_json = await self._wait_for_session_completion(turn_id, get_durable_chat_repository(), get_redis_cache())
         if result_json is not None:
             return TeacherSessionResult.model_validate(result_json)
 
